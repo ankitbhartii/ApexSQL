@@ -18,6 +18,7 @@ interface PlatformFetchModalProps {
   onClose: () => void;
   onSelectProblem: (problem: SqlProblem) => void;
   onToast: (msg: string) => void;
+  onOpenDirectory?: () => void;
 }
 
 export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
@@ -25,6 +26,7 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
   onClose,
   onSelectProblem,
   onToast,
+  onOpenDirectory,
 }) => {
   const [selectedPlatform, setSelectedPlatform] = useState<'all' | 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch'>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
@@ -344,6 +346,18 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              {onOpenDirectory && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onOpenDirectory();
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600 border border-cyan-500/40 text-cyan-300 hover:text-white text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                >
+                  <span>📚</span>
+                  <span>Browse Question Library (1,309) →</span>
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"

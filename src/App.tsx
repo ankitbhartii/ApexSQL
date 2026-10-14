@@ -26,6 +26,7 @@ import {
 import { useAuth } from './context/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { PlatformFetchModal } from './components/PlatformFetchModal';
+import { QuestionsDirectoryPage } from './components/QuestionsDirectoryPage';
 import { UserProfileMenu } from './components/UserProfileMenu';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
@@ -773,7 +774,41 @@ export default function App() {
   const [groundedSearchResult, setGroundedSearchResult] = useState<GoogleSearchGroundedPayload | null>(null);
   const [isGoogleSearchPanelOpen, setIsGoogleSearchPanelOpen] = useState<boolean>(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState<boolean>(false);
+  const [currentView, setCurrentView] = useState<'sandbox' | 'directory'>(() => {
+    if (typeof window !== 'undefined') {
+      const h = window.location.hash;
+      if (h === '#/questions' || h === '#/directory' || h === '#question-library') {
+        return 'directory';
+      }
+    }
+    return 'sandbox';
+  });
   const [submissionVerdict, setSubmissionVerdict] = useState<SubmissionVerdict | null>(null);
+
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash === '#/questions' || hash === '#/directory' || hash === '#question-library') {
+        setCurrentView('directory');
+      } else if (hash === '#/sandbox') {
+        setCurrentView('sandbox');
+      }
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  const handleSelectDirectoryProblem = useCallback((prob: SqlProblem) => {
+    livePipeline.ingestExternalProblems([prob], prob.platform);
+    setLiveProblems(livePipeline.getProblems());
+    setSelectedLiveProblemId(prob.id);
+    setActiveMode('live_stream');
+    setQuestionNumber(1);
+    setCurrentView('sandbox');
+    window.location.hash = '#/sandbox';
+    setInsertToast(`✓ Loaded "${prob.title}" into SQL Sandbox!`);
+    setTimeout(() => setInsertToast(null), 3500);
+  }, []);
 
   // Generate current problem
   const problem: SqlProblem = useMemo(() => {
@@ -1549,19 +1584,126 @@ export default function App() {
     return Array.from({ length: Math.max(count, 14) }, (_, i) => i + 1);
   }, [sqlCode]);
 
+  if (currentView === 'directory') {
+    return (
+      <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans">
+        {/* Persistent top header */}
+        <header className="flex items-center justify-between px-4 lg:px-6 h-14 bg-[#0f172a] border-b border-slate-800 shrink-0 z-30 select-none sticky top-0">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 mr-1">
+              <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/20">
+                SQL
+              </span>
+              <span className="font-extrabold text-sm tracking-tight text-white">ApexSQL</span>
+            </div>
+
+            <div className="inline-flex items-center p-0.5 bg-slate-900 rounded-lg border border-slate-750">
+              <button
+                onClick={() => {
+                  setCurrentView('sandbox');
+                  window.location.hash = '#/sandbox';
+                }}
+                className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
+              >
+                <span>⚡</span>
+                <span>Sandbox</span>
+              </button>
+              <button className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-cyan-600 text-white shadow-xs">
+                <span>📚</span>
+                <span>All Questions</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono">
+                  1,309
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => {
+                setCurrentView('sandbox');
+                window.location.hash = '#/sandbox';
+              }}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md cursor-pointer"
+            >
+              <span>⚡</span>
+              <span>Open SQL Sandbox</span>
+            </button>
+            <UserProfileMenu
+              solvedCount={Object.keys(solvedMap).length}
+              masteredCount={masteredList.length}
+              onSyncAll={handleCloudSyncAll}
+            />
+          </div>
+        </header>
+
+        <QuestionsDirectoryPage
+          onSelectProblem={handleSelectDirectoryProblem}
+          onBackToSandbox={() => {
+            setCurrentView('sandbox');
+            window.location.hash = '#/sandbox';
+          }}
+          solvedMap={solvedMap}
+        />
+
+        {insertToast && (
+          <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-2xl flex items-center gap-2">
+            <span>✓</span>
+            <span>{insertToast}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen max-h-screen overflow-hidden bg-[#090d16] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
       {/* ==================================================================== */}
       {/* 1. TOP DOCKED HEADER (DESKTOP & TABLET) */}
       {/* ==================================================================== */}
       <header className="hidden md:flex items-center justify-between px-4 lg:px-6 h-14 bg-[#0f172a] border-b border-slate-800 shrink-0 z-30 select-none">
-        {/* Left: Brand + Mode & Topic Selectors */}
+        {/* Left: Brand + View Switcher + Mode & Topic Selectors */}
         <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-2 mr-1">
             <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/20">
               SQL
             </span>
             <span className="font-extrabold text-sm tracking-tight text-white">ApexSQL</span>
+          </div>
+
+          {/* View Mode Navigation Tabs */}
+          <div className="inline-flex items-center p-0.5 bg-slate-900 rounded-lg border border-slate-750">
+            <button
+              onClick={() => {
+                setCurrentView('sandbox');
+                window.location.hash = '#/sandbox';
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                currentView === 'sandbox'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>⚡</span>
+              <span>Sandbox</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentView('directory');
+                window.location.hash = '#/questions';
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                currentView === 'directory'
+                  ? 'bg-cyan-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>📚</span>
+              <span>All Questions</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono">
+                1,309
+              </span>
+            </button>
           </div>
 
           <div className="h-4 w-px bg-slate-800 mx-0.5" />
@@ -1682,6 +1824,19 @@ export default function App() {
           >
             <span>🌐</span>
             <span className="hidden xl:inline">Fetch Platforms</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentView('directory');
+              window.location.hash = '#/questions';
+            }}
+            className="px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-600/20 hover:bg-cyan-600 border border-cyan-500/40 text-cyan-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Browse all 1,309 questions with serial numbers"
+          >
+            <span>📚</span>
+            <span className="hidden xl:inline">Question Library</span>
+            <span className="font-mono text-[10px] bg-cyan-500/20 px-1 rounded text-cyan-300">1,309</span>
           </button>
 
           <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-lg">
@@ -3745,6 +3900,10 @@ export default function App() {
         onToast={(msg) => {
           setInsertToast(msg);
           setTimeout(() => setInsertToast(null), 3500);
+        }}
+        onOpenDirectory={() => {
+          setCurrentView('directory');
+          window.location.hash = '#/questions';
         }}
       />
     </div>
