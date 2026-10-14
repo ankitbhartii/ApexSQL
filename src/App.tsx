@@ -746,8 +746,8 @@ export default function App() {
         source: `Google Search Grounded (${searchResult.company})`,
         time: 'Just now',
       });
-    } catch (err) {
-      console.warn('Google Search Grounding error:', err);
+    } catch {
+      // Fallback already handled in searchGoogleGroundingSql
     } finally {
       setIsGoogleSearching(false);
     }

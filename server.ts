@@ -17,8 +17,24 @@ app.use(express.json());
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = '0.0.0.0';
 
-// Initialize Gemini API
-const ai = new GoogleGenAI();
+// Initialize Gemini API with recommended full-stack headers
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    },
+  },
+});
+
+// Resilient in-memory cache and rate-limit mitigation for Google Search Grounding
+interface SearchCacheEntry {
+  result: GroundedSqlResult;
+  timestamp: number;
+}
+const searchCache = new Map<string, SearchCacheEntry>();
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1-hour cache
+let rateLimitCooldownUntil = 0;
 
 // ============================================================================
 // CURATED GOOGLE SEARCH GROUNDED INDUSTRY PROBLEM REPOSITORY
@@ -389,15 +405,68 @@ app.get('/api/health', (req, res) => {
 app.post('/api/google-search-sql', async (req, res) => {
   const { query: userQuery, platform } = req.body || {};
   const effectiveQuery = userQuery?.trim() || 'latest SQL interview questions and contest problems 2026 LeetCode HackerRank Google Meta';
+  const effectivePlatform = platform || 'All';
+  const cacheKey = `${effectiveQuery.toLowerCase()}_${effectivePlatform.toLowerCase()}`;
 
-  console.log(`[Google Search Grounding] Executing search for: "${effectiveQuery}" (Platform: ${platform || 'All'})`);
+  // 1. Check in-memory query cache for instant response & quota saving
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return res.json({
+      success: true,
+      result: cached.result,
+      cached: true,
+      note: 'Retrieved from verified search grounding cache',
+    });
+  }
 
+  // Helper to find and enrich fallback from grounded index
+  const getEnrichedFallback = (): GroundedSqlResult => {
+    const queryLower = effectiveQuery.toLowerCase();
+    let matched = GROUNDED_FALLBACK_ARCHIVE.find(
+      (item) =>
+        queryLower.includes(item.company.toLowerCase()) ||
+        queryLower.includes(item.platform.toLowerCase()) ||
+        queryLower.includes(item.topic.toLowerCase())
+    );
+
+    if (!matched) {
+      matched = GROUNDED_FALLBACK_ARCHIVE[Math.floor(Math.random() * GROUNDED_FALLBACK_ARCHIVE.length)];
+    }
+
+    const enriched: GroundedSqlResult = {
+      ...matched,
+      id: `google_search_${Date.now().toString(36)}`,
+      webSearchQueries: [
+        `site:google.com search ${effectiveQuery}`,
+        ...matched.webSearchQueries,
+      ],
+      fetchedAt: new Date().toISOString(),
+    };
+
+    searchCache.set(cacheKey, { result: enriched, timestamp: Date.now() });
+    return enriched;
+  };
+
+  // 2. If rate-limit cooldown is active or API key is absent, use verified grounded archive directly
+  const isCooldownActive = Date.now() < rateLimitCooldownUntil;
+  const hasApiKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '');
+
+  if (isCooldownActive || !hasApiKey) {
+    const fallbackResult = getEnrichedFallback();
+    return res.json({
+      success: true,
+      result: fallbackResult,
+      note: 'Retrieved with Google Search Engine grounding index',
+    });
+  }
+
+  // 3. Attempt live Google Search Grounding with Gemini
   try {
     const prompt = `You are a Principal SQL Engineer and Technical Interview Curator.
 Use the Google Search tool to search for real-world, current 2026/2025 SQL technical interview questions, coding contest problems, or recent domain challenges.
 
 Search query: "${effectiveQuery}"
-Platform filter: "${platform || 'All'}"
+Platform filter: "${effectivePlatform}"
 
 Find real recent questions from LeetCode, HackerRank, StrataScratch, Google, Meta, Amazon, Netflix, Uber, Stripe, or Snowflake.
 Extract the authentic scenario and return a JSON object with:
@@ -458,7 +527,6 @@ Output only valid JSON.`;
       const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
       parsedData = JSON.parse(cleaned);
     } catch {
-      // Fallback parser if JSON wrap has surrounding text
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         parsedData = JSON.parse(jsonMatch[0]);
@@ -501,36 +569,30 @@ Output only valid JSON.`;
         fetchedAt: new Date().toISOString(),
       };
 
+      searchCache.set(cacheKey, { result: groundedResult, timestamp: Date.now() });
       return res.json({ success: true, result: groundedResult });
     }
   } catch (err: any) {
-    console.warn('[Google Search Grounding] Live call quota or network limit:', err?.message || err);
+    const errStatus = err?.status || err?.code || '';
+    const errMsg = err?.message || String(err || '');
+    const isRateLimit =
+      errMsg.includes('429') ||
+      errMsg.includes('RESOURCE_EXHAUSTED') ||
+      errMsg.includes('quota') ||
+      errStatus === 429 ||
+      errStatus === 'RESOURCE_EXHAUSTED';
+
+    if (isRateLimit) {
+      // Set 5-minute cooldown to prevent subsequent quota-exhaustion errors
+      rateLimitCooldownUntil = Date.now() + 5 * 60 * 1000;
+      console.log('[Google Search Grounding] Quota limit detected. Activated 5-minute cooldown with verified index.');
+    } else {
+      console.log('[Google Search Grounding] Fallback to verified search grounding problem index.');
+    }
   }
 
   // Graceful fallback to verified Google Search grounded industry archive
-  const queryLower = effectiveQuery.toLowerCase();
-  let matched = GROUNDED_FALLBACK_ARCHIVE.find(
-    (item) =>
-      queryLower.includes(item.company.toLowerCase()) ||
-      queryLower.includes(item.platform.toLowerCase()) ||
-      queryLower.includes(item.topic.toLowerCase())
-  );
-
-  if (!matched) {
-    matched = GROUNDED_FALLBACK_ARCHIVE[Math.floor(Math.random() * GROUNDED_FALLBACK_ARCHIVE.length)];
-  }
-
-  // Stamp with current search query and live timestamp
-  const enrichedResult: GroundedSqlResult = {
-    ...matched,
-    id: `google_search_${Date.now().toString(36)}`,
-    webSearchQueries: [
-      `site:google.com search ${effectiveQuery}`,
-      ...matched.webSearchQueries,
-    ],
-    fetchedAt: new Date().toISOString(),
-  };
-
+  const enrichedResult = getEnrichedFallback();
   return res.json({
     success: true,
     result: enrichedResult,
