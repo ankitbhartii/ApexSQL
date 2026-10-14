@@ -1173,7 +1173,19 @@ export default function App() {
   };
 
   const TOTAL_QUESTIONS_COUNT = 27500;
-  const totalQuestionsCount = activeMode === 'live_stream' ? (liveProblems.length || 1) : TOTAL_QUESTIONS_COUNT;
+  const totalQuestionsCount = useMemo(() => {
+    if (activeMode === 'live_stream') {
+      return liveProblems.length || 1;
+    }
+    return currentTopicConfig?.count ?? TOTAL_QUESTIONS_COUNT;
+  }, [activeMode, liveProblems.length, currentTopicConfig]);
+
+  // Keep questionNumber safely within valid bounds of the currently active topic or mode
+  useEffect(() => {
+    if (questionNumber > totalQuestionsCount && totalQuestionsCount > 0) {
+      setQuestionNumber(1);
+    }
+  }, [totalQuestionsCount, questionNumber]);
 
   // Countdown timer interval & persistence
   useEffect(() => {
