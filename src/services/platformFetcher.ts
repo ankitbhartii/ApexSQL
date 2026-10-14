@@ -12,7 +12,7 @@ import {
 } from './platformQuestionsData';
 
 export interface FetchPlatformOptions {
-  platform: 'leetcode' | 'hackerrank' | 'stratascratch' | 'all';
+  platform: 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch' | 'all';
   limit?: number | 'all';
   difficulty?: 'All' | 'Easy' | 'Medium' | 'Hard';
 }
@@ -27,7 +27,7 @@ export interface FetchPlatformResult {
 }
 
 /**
- * Fetches real SQL questions from platforms (LeetCode, HackerRank, StrataScratch)
+ * Fetches real SQL questions from platforms (LeetCode, HackerRank, DataDriven, StrataScratch)
  * via the full-stack server endpoint or client-side verified catalog fallback.
  */
 export async function fetchPlatformQuestions(
@@ -68,6 +68,8 @@ export async function fetchPlatformQuestions(
       filtered = filtered.filter((p) => p.platform === 'LeetCode');
     } else if (platform === 'hackerrank') {
       filtered = filtered.filter((p) => p.platform === 'HackerRank');
+    } else if (platform === 'datadriven') {
+      filtered = filtered.filter((p) => p.platform === 'DataDriven');
     } else if (platform === 'stratascratch') {
       filtered = filtered.filter((p) => p.platform === 'FAANG+ Mock');
     }

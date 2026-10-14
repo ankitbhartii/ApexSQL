@@ -26,7 +26,7 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
   onSelectProblem,
   onToast,
 }) => {
-  const [selectedPlatform, setSelectedPlatform] = useState<'all' | 'leetcode' | 'hackerrank' | 'stratascratch'>('all');
+  const [selectedPlatform, setSelectedPlatform] = useState<'all' | 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch'>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [fetchLimit, setFetchLimit] = useState<number | 'all'>('all');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -130,7 +130,7 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
               <label className="text-xs font-semibold text-slate-300 mb-2 block">
                 1. Select Target Platform:
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
                 {SUPPORTED_PLATFORMS.map((plat) => {
                   const isSelected = selectedPlatform === plat.id;
                   return (
