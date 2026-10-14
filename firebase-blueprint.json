@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with display info and SQL mastery stats",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "totalSolved": {
+          "type": "number"
+        },
+        "masteredCount": {
+          "type": "number"
+        },
+        "streakDays": {
+          "type": "number"
+        },
+        "xpPoints": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "UserProgress": {
+      "title": "UserProgress",
+      "description": "User progress across SQL drill tracks and interview questions",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "solvedProblems": {
+          "type": "array"
+        },
+        "masteredProblems": {
+          "type": "array"
+        },
+        "reviewProblems": {
+          "type": "array"
+        },
+        "notesMap": {
+          "type": "object"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["userId"]
+    },
+    "UserQuery": {
+      "title": "UserQuery",
+      "description": "User saved draft or verified solution for a specific problem",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "problemId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "sqlCode": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "dialect": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "isSolved": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["userId", "problemId", "sqlCode"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile root storing display name and aggregate practice stats"
+    },
+    "/users/{userId}/progress/state": {
+      "schema": "UserProgress",
+      "description": "User progress state record storing solved array, review list, and notes"
+    },
+    "/users/{userId}/queries/{queryId}": {
+      "schema": "UserQuery",
+      "description": "Individual SQL queries and drafts keyed by user and question"
+    }
+  }
+}

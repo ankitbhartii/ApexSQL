@@ -1,0 +1,6 @@
+{
+  "name": "Ultimate SQL Interview Preparation & Sandbox Dashboard",
+  "description": "Production-ready, mobile-responsive SQL technical interview prep platform with 12,000+ procedural challenges, multi-dialect sandbox, interactive schema explorer, and automated query execution engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
