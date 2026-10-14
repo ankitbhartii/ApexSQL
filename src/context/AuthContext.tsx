@@ -49,6 +49,7 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, displayName: string, role?: string) => Promise<void>;
+  loginAsGuest: (displayName?: string, role?: string) => void;
   logout: () => Promise<void>;
   syncProgressToCloud: (progress: {
     solvedProblems: string[];
@@ -180,6 +181,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginAsGuest = (displayName = 'Candidate Guest', role = 'Data Analyst') => {
+    const guestUser = {
+      uid: 'guest-' + Math.random().toString(36).substring(2, 9),
+      email: 'guest@candidate.local',
+      displayName,
+      photoURL: '',
+    } as unknown as User;
+
+    setCurrentUser(guestUser);
+    setUserProfile({
+      uid: guestUser.uid,
+      email: guestUser.email || '',
+      displayName,
+      role,
+      streakDays: 1,
+      xpPoints: 50
+    });
+    setSyncStatus('idle');
+    setIsAuthModalOpen(false);
+  };
+
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
@@ -257,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithGoogle,
         loginWithEmail,
         registerWithEmail,
+        loginAsGuest,
         logout,
         syncProgressToCloud,
         syncQueryToCloud,

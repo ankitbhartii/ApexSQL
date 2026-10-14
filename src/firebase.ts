@@ -24,13 +24,26 @@ import {
   getDocs,
   getDocFromServer
 } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import defaultFirebaseConfig from '../firebase-applet-config.json';
+
+// Support Vercel / custom environment variables with fallback to config file
+export const activeFirebaseConfig = {
+  projectId: (import.meta.env.VITE_FIREBASE_PROJECT_ID as string) || defaultFirebaseConfig.projectId,
+  appId: (import.meta.env.VITE_FIREBASE_APP_ID as string) || defaultFirebaseConfig.appId,
+  apiKey: (import.meta.env.VITE_FIREBASE_API_KEY as string) || defaultFirebaseConfig.apiKey,
+  authDomain: (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string) || defaultFirebaseConfig.authDomain,
+  firestoreDatabaseId: (import.meta.env.VITE_FIREBASE_DATABASE_ID as string) || defaultFirebaseConfig.firestoreDatabaseId,
+  storageBucket: (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string) || defaultFirebaseConfig.storageBucket,
+  messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || defaultFirebaseConfig.messagingSenderId,
+};
 
 // Initialize Firebase App
-export const app = initializeApp(firebaseConfig);
+export const app = initializeApp(activeFirebaseConfig);
 
-// Initialize Cloud Firestore with dedicated databaseId
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Cloud Firestore with dedicated databaseId if provided and not default
+export const db = (activeFirebaseConfig.firestoreDatabaseId && activeFirebaseConfig.firestoreDatabaseId !== '(default)')
+  ? getFirestore(app, activeFirebaseConfig.firestoreDatabaseId)
+  : getFirestore(app);
 
 // Initialize Authentication
 export const auth = getAuth(app);
@@ -115,6 +128,7 @@ export interface UserProgressCloud {
 }
 
 export async function syncUserProfile(user: User, additionalData?: { role?: string; xpPoints?: number }) {
+  if (!user?.uid || user.uid.startsWith('guest-')) return;
   const userRef = doc(db, 'users', user.uid);
   const path = `users/${user.uid}`;
   try {
@@ -150,6 +164,7 @@ export async function syncUserProfile(user: User, additionalData?: { role?: stri
 }
 
 export async function saveUserProgressCloud(userId: string, data: Partial<UserProgressCloud>) {
+  if (!userId || userId.startsWith('guest-')) return;
   const ref = doc(db, 'users', userId, 'progress', 'state');
   const path = `users/${userId}/progress/state`;
   try {
@@ -167,6 +182,7 @@ export async function saveUserProgressCloud(userId: string, data: Partial<UserPr
 }
 
 export async function loadUserProgressCloud(userId: string): Promise<UserProgressCloud | null> {
+  if (!userId || userId.startsWith('guest-')) return null;
   const ref = doc(db, 'users', userId, 'progress', 'state');
   const path = `users/${userId}/progress/state`;
   try {
@@ -181,6 +197,7 @@ export async function loadUserProgressCloud(userId: string): Promise<UserProgres
 }
 
 export async function saveUserQueryCloud(userId: string, problemId: string, sqlCode: string, dialect: string, isSolved = false) {
+  if (!userId || userId.startsWith('guest-')) return;
   const safeId = `${problemId}_${dialect}`.replace(/[^a-zA-Z0-9_-]/g, '_');
   const ref = doc(db, 'users', userId, 'queries', safeId);
   const path = `users/${userId}/queries/${safeId}`;
@@ -199,6 +216,7 @@ export async function saveUserQueryCloud(userId: string, problemId: string, sqlC
 }
 
 export async function loadUserQueriesCloud(userId: string): Promise<Record<string, string>> {
+  if (!userId || userId.startsWith('guest-')) return {};
   const colRef = collection(db, 'users', userId, 'queries');
   const path = `users/${userId}/queries`;
   try {

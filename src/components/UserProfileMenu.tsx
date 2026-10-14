@@ -86,6 +86,8 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
   const email = currentUser.email || 'Cloud User';
   const photo = currentUser.photoURL;
 
+  const isGuest = currentUser.uid.startsWith('guest-');
+
   return (
     <div className="relative" ref={menuRef}>
       {/* Trigger Button */}
@@ -114,17 +116,19 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
             {/* Live Database status beacon */}
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                syncStatus === 'synced'
+                isGuest
+                  ? 'bg-amber-400'
+                  : syncStatus === 'synced'
                   ? 'bg-emerald-400 animate-pulse'
                   : syncStatus === 'saving'
                   ? 'bg-amber-400 animate-spin'
                   : 'bg-slate-400'
               }`}
-              title={syncStatus === 'synced' ? 'Database Connected & Synced' : syncStatus}
+              title={isGuest ? 'Guest Mode (SafeStorage)' : syncStatus === 'synced' ? 'Database Connected & Synced' : syncStatus}
             />
           </div>
           <span className="text-[10px] text-cyan-400 font-mono leading-none">
-            {userProfile?.role || 'SQL Dev'}
+            {isGuest ? 'Guest User' : (userProfile?.role || 'SQL Dev')}
           </span>
         </div>
 
@@ -137,7 +141,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
           <motion.div
             initial={{ opacity: 0, y: 8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.96 }}
+            exit={{ opacity: 0, y: 8, scale: 1 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
             className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 py-3 px-3 z-50 text-slate-200"
           >
@@ -158,8 +162,10 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
                 <div className="overflow-hidden">
                   <div className="font-bold text-xs text-slate-100 truncate flex items-center gap-1.5">
                     {displayName}
-                    <span className="px-1.5 py-0.2 text-[9px] rounded bg-cyan-500/20 text-cyan-300 font-normal">
-                      Verified
+                    <span className={`px-1.5 py-0.2 text-[9px] rounded font-normal ${
+                      isGuest ? 'bg-amber-500/20 text-amber-300' : 'bg-cyan-500/20 text-cyan-300'
+                    }`}>
+                      {isGuest ? 'Guest' : 'Verified'}
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-400 truncate">{email}</div>
@@ -199,13 +205,28 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
             <div className="px-2 py-1.5 flex items-center justify-between text-xs text-slate-400 mb-2 bg-slate-800/40 rounded-lg">
               <div className="flex items-center gap-2">
                 <Database className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="text-[11px]">Firestore Cloud DB:</span>
+                <span className="text-[11px]">{isGuest ? 'Storage Engine:' : 'Firestore Cloud DB:'}</span>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 font-medium flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Connected
+              <span className={`text-[10px] font-mono font-medium flex items-center gap-1 ${
+                isGuest ? 'text-amber-400' : 'text-emerald-400'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isGuest ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+                {isGuest ? 'Local SafeStorage' : 'Connected'}
               </span>
             </div>
+
+            {isGuest && (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  openAuthModal('signin');
+                }}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:text-cyan-200 bg-cyan-950/60 hover:bg-cyan-900/60 rounded-xl transition border border-cyan-500/40 mb-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Link Cloud Account</span>
+              </button>
+            )}
 
             {/* Sync Now Action */}
             <button

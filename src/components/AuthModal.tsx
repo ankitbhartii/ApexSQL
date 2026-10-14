@@ -15,24 +15,29 @@ import {
   Database,
   Sparkles,
   ShieldCheck,
-  CheckCircle2,
   AlertCircle,
   Briefcase,
-  Terminal,
   Zap,
-  ArrowRight
+  ArrowRight,
+  Copy,
+  Check,
+  ExternalLink,
+  AlertTriangle,
+  Globe,
+  UserCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { activeFirebaseConfig } from '../firebase';
 
 export const AuthModal: React.FC = () => {
   const {
     isAuthModalOpen,
     authModalMode,
     closeAuthModal,
-    openAuthModal,
     loginWithGoogle,
     loginWithEmail,
-    registerWithEmail
+    registerWithEmail,
+    loginAsGuest
   } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>(authModalMode);
@@ -45,11 +50,16 @@ export const AuthModal: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Vercel / Domain authorization diagnosis state
+  const [domainError, setDomainError] = useState<{ domain: string; projectId: string } | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
+
   // Sync mode state when prop changes
   React.useEffect(() => {
     setMode(authModalMode);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setDomainError(null);
   }, [authModalMode, isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
@@ -73,9 +83,16 @@ export const AuthModal: React.FC = () => {
 
   const passStrength = calculatePasswordStrength(password);
 
+  const handleCopyDomain = (domainToCopy: string) => {
+    navigator.clipboard.writeText(domainToCopy);
+    setCopiedDomain(true);
+    setTimeout(() => setCopiedDomain(false), 2000);
+  };
+
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setErrorMessage(null);
+    setDomainError(null);
     try {
       await loginWithGoogle();
       setSuccessMessage('Successfully signed in with Google!');
@@ -83,10 +100,29 @@ export const AuthModal: React.FC = () => {
         closeAuthModal();
       }, 500);
     } catch (err: any) {
-      if (err?.code === 'auth/popup-closed-by-user') {
-        setErrorMessage('Sign-in popup was closed. Please try again.');
+      console.error('Google Sign-In failed:', err);
+      const errCode = err?.code || '';
+      const errMsg = err?.message || '';
+
+      if (
+        errCode === 'auth/unauthorized-domain' ||
+        errMsg.toLowerCase().includes('unauthorized-domain') ||
+        errMsg.toLowerCase().includes('authorized domain')
+      ) {
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'your-app.vercel.app';
+        setDomainError({
+          domain: currentHost,
+          projectId: activeFirebaseConfig.projectId
+        });
+        setErrorMessage(
+          `Domain "${currentHost}" is not authorized in your Firebase project. Follow the quick steps below to authorize it.`
+        );
+      } else if (errCode === 'auth/popup-closed-by-user') {
+        setErrorMessage('Sign-in popup was closed before completing. Please try again.');
+      } else if (errCode === 'auth/popup-blocked') {
+        setErrorMessage('Popup blocked by browser. Please enable popups for this site to sign in.');
       } else {
-        setErrorMessage(err?.message || 'Failed to sign in with Google');
+        setErrorMessage(errMsg || 'Failed to sign in with Google');
       }
     } finally {
       setLoading(false);
@@ -97,6 +133,7 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+    setDomainError(null);
 
     if (!email.trim() || !password.trim()) {
       setErrorMessage('Please fill in both email and password.');
@@ -128,20 +165,45 @@ export const AuthModal: React.FC = () => {
       }, 600);
     } catch (err: any) {
       console.error(err);
-      if (err?.code === 'auth/operation-not-allowed') {
+      const errCode = err?.code || '';
+      const errMsg = err?.message || '';
+
+      if (
+        errCode === 'auth/unauthorized-domain' ||
+        errMsg.toLowerCase().includes('unauthorized-domain') ||
+        errMsg.toLowerCase().includes('authorized domain')
+      ) {
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'your-app.vercel.app';
+        setDomainError({
+          domain: currentHost,
+          projectId: activeFirebaseConfig.projectId
+        });
         setErrorMessage(
-          'Email/Password provider is disabled in Firebase Console. Please use "Continue with Google" above or enable Email/Password provider.'
+          `Domain "${currentHost}" is not authorized in your Firebase project. Follow the quick steps below to authorize it.`
         );
-      } else if (err?.code === 'auth/email-already-in-use') {
+      } else if (errCode === 'auth/operation-not-allowed') {
+        setErrorMessage(
+          'Email/Password provider is disabled in Firebase Console. Enable "Email/Password" under Authentication > Sign-in method, or use "Continue with Google" or Guest Mode.'
+        );
+      } else if (errCode === 'auth/email-already-in-use') {
         setErrorMessage('An account with this email already exists. Try signing in instead.');
-      } else if (err?.code === 'auth/user-not-found' || err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
+      } else if (
+        errCode === 'auth/user-not-found' ||
+        errCode === 'auth/wrong-password' ||
+        errCode === 'auth/invalid-credential'
+      ) {
         setErrorMessage('Invalid email or password. Please verify and try again.');
       } else {
-        setErrorMessage(err?.message || 'Authentication failed. Please try again.');
+        setErrorMessage(errMsg || 'Authentication failed. Please try again.');
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGuestSignIn = () => {
+    loginAsGuest(displayName.trim() || 'Candidate Demo', selectedRole);
+    closeAuthModal();
   };
 
   return (
@@ -206,6 +268,7 @@ export const AuthModal: React.FC = () => {
               onClick={() => {
                 setMode('signin');
                 setErrorMessage(null);
+                setDomainError(null);
               }}
               className={`py-2 text-xs font-semibold rounded-lg transition-all relative z-10 flex items-center justify-center gap-1.5 ${
                 mode === 'signin'
@@ -221,6 +284,7 @@ export const AuthModal: React.FC = () => {
               onClick={() => {
                 setMode('signup');
                 setErrorMessage(null);
+                setDomainError(null);
               }}
               className={`py-2 text-xs font-semibold rounded-lg transition-all relative z-10 flex items-center justify-center gap-1.5 ${
                 mode === 'signup'
@@ -244,6 +308,82 @@ export const AuthModal: React.FC = () => {
 
         {/* Form Body */}
         <div className="px-6 py-4 flex-1 overflow-y-auto max-h-[75vh]">
+          {/* Domain Authorization Diagnostic Card (Triggers on unauthorized-domain error on Vercel) */}
+          <AnimatePresence>
+            {domainError && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 p-4 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex flex-col gap-3 shadow-lg shadow-amber-950/20"
+              >
+                <div className="flex items-center gap-2 text-amber-300 font-semibold text-xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>Vercel Domain Authorization Required in Firebase</span>
+                </div>
+
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  Firebase Authentication prevents OAuth on domains that aren't whitelisted. To fix this for your Vercel deployment:
+                </p>
+
+                {/* Domain & Copy Box */}
+                <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-950 border border-amber-500/30 font-mono text-[11px] text-amber-300">
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <Globe className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                    <span className="truncate">{domainError.domain}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyDomain(domainError.domain)}
+                    className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] font-sans font-medium flex items-center gap-1 transition flex-shrink-0"
+                  >
+                    {copiedDomain ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    {copiedDomain ? 'Copied!' : 'Copy Domain'}
+                  </button>
+                </div>
+
+                {/* 3-Step Guide */}
+                <div className="space-y-1.5 text-[11px] text-slate-300 pt-1 border-t border-amber-500/20">
+                  <p className="font-semibold text-amber-300">Quick 30-Second Fix:</p>
+                  <ol className="list-decimal list-inside space-y-1 pl-0.5 text-slate-300">
+                    <li>
+                      Open{' '}
+                      <a
+                        href={`https://console.firebase.google.com/project/${domainError.projectId}/authentication/settings`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-cyan-400 underline font-medium hover:text-cyan-300 inline-flex items-center gap-0.5"
+                      >
+                        Firebase Auth Settings <ExternalLink className="w-3 h-3 inline" />
+                      </a>
+                    </li>
+                    <li>Scroll down to the <strong>Authorized domains</strong> section</li>
+                    <li>
+                      Click <strong>Add domain</strong>, paste{' '}
+                      <code className="text-amber-300 bg-slate-900 px-1 py-0.5 rounded font-mono">
+                        {domainError.domain}
+                      </code>
+                      , and click <strong>Save</strong>
+                    </li>
+                  </ol>
+                </div>
+
+                {/* Immediate Demo Bypass */}
+                <div className="pt-2 flex items-center justify-between gap-2 border-t border-amber-500/20">
+                  <span className="text-slate-400 text-[10px]">Testing right now?</span>
+                  <button
+                    type="button"
+                    onClick={handleGuestSignIn}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 text-xs font-medium transition flex items-center gap-1.5 border border-cyan-500/40"
+                  >
+                    <UserCheck className="w-3.5 h-3.5 text-cyan-300" />
+                    Continue as Guest / Demo
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Google Sign In Button */}
           <div className="mb-4">
             <button
@@ -285,9 +425,9 @@ export const AuthModal: React.FC = () => {
             <div className="flex-1 border-t border-slate-800" />
           </div>
 
-          {/* Feedback Alerts */}
+          {/* Feedback Alerts (General error if not domainError) */}
           <AnimatePresence>
-            {errorMessage && (
+            {errorMessage && !domainError && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -308,18 +448,19 @@ export const AuthModal: React.FC = () => {
                 exit={{ opacity: 0, height: 0 }}
                 className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5"
               >
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>{successMessage}</span>
+                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <p>{successMessage}</p>
               </motion.div>
             )}
           </AnimatePresence>
 
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-3.5">
-            {/* Sign Up Specific: Display Name */}
+            {/* Display Name (Only on Signup) */}
             {mode === 'signup' && (
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Full Name / Username
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                  Full Name / Candidate Handle
                 </label>
                 <div className="relative">
                   <UserIcon className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
@@ -328,21 +469,21 @@ export const AuthModal: React.FC = () => {
                     required
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="e.g. Alex Morgan"
+                    placeholder="e.g. Alex Chen"
                     className="w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
                   />
                 </div>
               </div>
             )}
 
-            {/* Sign Up Specific: Role Selector */}
+            {/* Role Selection (Only on Signup) */}
             {mode === 'signup' && (
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center justify-between">
-                  <span>Target Role Track</span>
-                  <span className="text-[10px] text-slate-500">Customizes drill sets</span>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1 flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5 text-cyan-400" />
+                  Target Interview Track
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   {roles.map((r) => (
                     <button
                       key={r.id}
@@ -350,12 +491,12 @@ export const AuthModal: React.FC = () => {
                       onClick={() => setSelectedRole(r.id)}
                       className={`p-2 rounded-xl border text-left text-xs transition flex items-center gap-2 ${
                         selectedRole === r.id
-                          ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-200'
-                          : 'bg-slate-800/50 border-slate-700/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                          ? 'border-cyan-500/80 bg-cyan-500/15 text-cyan-200 font-semibold'
+                          : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                       }`}
                     >
-                      <span>{r.icon}</span>
-                      <span className="truncate font-medium">{r.label}</span>
+                      <span className="text-sm">{r.icon}</span>
+                      <span className="truncate">{r.label}</span>
                     </button>
                   ))}
                 </div>
@@ -364,7 +505,7 @@ export const AuthModal: React.FC = () => {
 
             {/* Email Field */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              <label className="block text-[11px] font-medium text-slate-300 mb-1">
                 Work or Personal Email
               </label>
               <div className="relative">
@@ -374,7 +515,7 @@ export const AuthModal: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
+                  placeholder="candidate@company.com"
                   className="w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
                 />
               </div>
@@ -382,21 +523,12 @@ export const AuthModal: React.FC = () => {
 
             {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-slate-300">
-                  Password
-                </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-medium text-slate-300">Password</label>
                 {mode === 'signin' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('demo.candidate@ultimatesql.dev');
-                      setPassword('SQLMaster123!');
-                    }}
-                    className="text-[11px] text-cyan-400 hover:underline"
-                  >
-                    Use Demo Credentials
-                  </button>
+                  <span className="text-[10px] text-slate-500 hover:text-cyan-400 cursor-pointer">
+                    Forgot password?
+                  </span>
                 )}
               </div>
               <div className="relative">
@@ -465,8 +597,21 @@ export const AuthModal: React.FC = () => {
             </button>
           </form>
 
+          {/* Guest / Demo Mode Quick Access */}
+          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+            <span className="text-slate-400 text-[11px]">Testing or exploring?</span>
+            <button
+              type="button"
+              onClick={handleGuestSignIn}
+              className="text-cyan-400 hover:text-cyan-300 font-medium text-[11px] flex items-center gap-1 hover:underline transition"
+            >
+              <Zap className="w-3 h-3" />
+              Continue as Guest (Local Storage)
+            </button>
+          </div>
+
           {/* Cloud Features Info footer */}
-          <div className="mt-5 p-3 rounded-xl bg-slate-800/40 border border-slate-700/50 flex items-start gap-2.5">
+          <div className="mt-3 p-3 rounded-xl bg-slate-800/40 border border-slate-700/50 flex items-start gap-2.5">
             <ShieldCheck className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
             <div className="text-[11px] text-slate-400 leading-relaxed">
               <span className="font-semibold text-slate-300">Enterprise Cloud Sync:</span> All solved questions, SQL draft code, candidate notes, and execution diff benchmarks are automatically synced to your isolated Firestore account.

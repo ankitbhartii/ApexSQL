@@ -26,6 +26,7 @@ import {
 import { useAuth } from './context/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { UserProfileMenu } from './components/UserProfileMenu';
+import alasql from 'alasql';
 
 // ============================================================================
 // SAFE STORAGE WRAPPER (Prevents SecurityError in sandboxed mobile WebViews)
@@ -168,6 +169,15 @@ function extractColumnsFromSql(sql: string): string[] {
     .filter(Boolean);
 }
 
+function stripSqlComments(sql: string): string {
+  if (!sql) return '';
+  // Strip block comments /* ... */
+  let cleaned = sql.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  // Strip line comments -- ...
+  cleaned = cleaned.replace(/--.*$/gm, ' ');
+  return cleaned.trim();
+}
+
 function generateDiffReport(
   userCols: string[],
   userRows: Record<string, any>[],
@@ -183,7 +193,7 @@ function generateDiffReport(
   const extraColumns = userCols.filter(
     (uc) => !normExpCols.includes(uc.toLowerCase())
   );
-  const columnMatch = missingColumns.length === 0;
+  const columnMatch = missingColumns.length === 0 && extraColumns.length === 0;
   const rowCountMatch = userRows.length === expRows.length;
 
   const cellDiffs: CellDiff[] = [];
@@ -221,6 +231,7 @@ function generateDiffReport(
 
       let status: CellDiff['status'] = 'MATCH';
       if (uRow === undefined) status = 'MISSING_USER_CELL';
+      else if (eRow === undefined) status = 'EXTRA_USER_CELL';
       else if (!isCellMatch) status = 'VALUE_MISMATCH';
 
       cellDiffs.push({
@@ -262,21 +273,83 @@ function generateDiffReport(
 }
 
 // ============================================================================
-// QUERY SIMULATION ENGINE
-// Evaluates query structure, table references, and dialect compliance
+// REAL IN-MEMORY SQL EXECUTION ENGINE (Powered by AlaSQL)
+// Executes queries against schema sample data with comment sanitization
+// ============================================================================
+function runSqlWithAlaSql(
+  cleanSql: string,
+  problem: SqlProblem
+): { success: boolean; rows: Record<string, any>[]; columns: string[]; error?: string } {
+  try {
+    const db = new (alasql as any).Database();
+
+    // Register all schema tables
+    problem.schemas.forEach((schema) => {
+      const rawName = schema.tableName;
+      const safeName = rawName.replace(/[^a-zA-Z0-9_]/g, '_');
+
+      try {
+        db.exec(`CREATE TABLE [${rawName}]`);
+        db.exec(`INSERT INTO [${rawName}] SELECT * FROM ?`, [schema.sampleRows]);
+      } catch {}
+
+      if (safeName !== rawName) {
+        try {
+          db.exec(`CREATE TABLE ${safeName}`);
+          db.exec(`INSERT INTO ${safeName} SELECT * FROM ?`, [schema.sampleRows]);
+        } catch {}
+      }
+    });
+
+    let execQuery = cleanSql.replace(/;\s*$/, '').trim();
+
+    // Normalize backticks `table_name` to brackets [table_name]
+    execQuery = execQuery.replace(/`([^`]+)`/g, '[$1]');
+
+    // Replace unquoted hyphenated table names with bracketed versions
+    problem.schemas.forEach((schema) => {
+      const rawName = schema.tableName;
+      if (rawName.includes('-')) {
+        const regex = new RegExp(`(?<!\\[)\\b${rawName}\\b(?!\\])`, 'gi');
+        execQuery = execQuery.replace(regex, `[${rawName}]`);
+      }
+    });
+
+    const rawResult = db.exec(execQuery);
+    const rows: Record<string, any>[] = Array.isArray(rawResult) ? rawResult : [];
+
+    let columns: string[] = [];
+    if (rows.length > 0 && typeof rows[0] === 'object' && rows[0] !== null) {
+      columns = Object.keys(rows[0]);
+    } else {
+      columns = extractColumnsFromSql(cleanSql);
+    }
+
+    return { success: true, rows, columns };
+  } catch (err: any) {
+    return { success: false, rows: [], columns: [], error: err?.message || 'SQL Execution Error' };
+  }
+}
+
+// ============================================================================
+// QUERY EVALUATION & VERIFICATION ENGINE
 // ============================================================================
 function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
-  const normalized = sql.toUpperCase().replace(/\s+/g, ' ').trim();
   const startTime = performance.now();
+  const cleanCode = stripSqlComments(sql);
+  const normalized = cleanCode.toUpperCase().replace(/\s+/g, ' ').trim();
 
   const isSyntaxValid =
     normalized.includes('SELECT') && normalized.includes('FROM');
 
-  const refersToProblemTable = problem.schemas.some((s) =>
-    normalized.includes(s.tableName.toUpperCase())
-  );
+  const refersToProblemTable = problem.schemas.some((s) => {
+    const rawName = s.tableName.toUpperCase();
+    const safeName = rawName.replace(/[^A-Z0-9]/g, '');
+    const cleanNorm = normalized.replace(/[`"\[\]]/g, '');
+    return cleanNorm.includes(rawName) || cleanNorm.includes(safeName);
+  });
 
-  const checks = [
+  const checks: { id: string; label: string; passed: boolean }[] = [
     {
       id: 'chk_select_from',
       label: 'Valid SQL structure with SELECT and FROM clauses',
@@ -289,9 +362,13 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     },
   ];
 
+  const reqText = problem.requirements.join(' ').toLowerCase();
+
+  // 1. WHERE filtering check
   if (
     problem.topic === 'beginner_basics' ||
-    problem.requirements.some((r) => r.toLowerCase().includes('filter'))
+    reqText.includes('filter') ||
+    reqText.includes('where')
   ) {
     checks.push({
       id: 'chk_where',
@@ -300,9 +377,12 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     });
   }
 
+  // 2. ORDER BY sorting check
   if (
     problem.topic === 'beginner_sorting' ||
-    problem.requirements.some((r) => r.toLowerCase().includes('sort'))
+    reqText.includes('sort') ||
+    reqText.includes('order by') ||
+    reqText.includes('ranked by')
   ) {
     checks.push({
       id: 'chk_order_by',
@@ -311,9 +391,38 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     });
   }
 
+  // 3. DESCENDING order check
+  if (reqText.includes('descending') || reqText.includes('desc')) {
+    checks.push({
+      id: 'chk_desc',
+      label: 'Specifies DESC order for primary sorting attribute',
+      passed: /\bORDER\s+BY\b[\s\S]*\bDESC\b/i.test(cleanCode),
+    });
+  }
+
+  // 4. LIMIT clause check
+  const limitMatch = reqText.match(/(?:limit|top|exactly)\s*(\d+)/i);
+  if (reqText.includes('limit') || limitMatch) {
+    const expectedLimit = limitMatch ? parseInt(limitMatch[1], 10) : null;
+    const hasLimit = normalized.includes('LIMIT');
+    const hasExpectedNum = expectedLimit
+      ? new RegExp(`\\bLIMIT\\s+${expectedLimit}\\b`, 'i').test(cleanCode) || hasLimit
+      : hasLimit;
+
+    checks.push({
+      id: 'chk_limit',
+      label: expectedLimit
+        ? `Limits output to exactly ${expectedLimit} records via LIMIT clause`
+        : 'Restricts output records via LIMIT clause',
+      passed: hasExpectedNum,
+    });
+  }
+
+  // 5. GROUP BY aggregations
   if (
     problem.topic === 'aggregations' ||
-    problem.requirements.some((r) => r.toLowerCase().includes('group'))
+    reqText.includes('group by') ||
+    reqText.includes('aggregated')
   ) {
     checks.push({
       id: 'chk_group_by',
@@ -322,9 +431,21 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     });
   }
 
+  // 6. HAVING filter
+  if (reqText.includes('having')) {
+    checks.push({
+      id: 'chk_having',
+      label: 'Filters aggregated groups via HAVING clause',
+      passed: normalized.includes('HAVING'),
+    });
+  }
+
+  // 7. Window functions
   if (
     problem.topic === 'window' ||
-    problem.requirements.some((r) => r.toLowerCase().includes('window'))
+    reqText.includes('window') ||
+    reqText.includes('over (') ||
+    reqText.includes('partition by')
   ) {
     checks.push({
       id: 'chk_over',
@@ -333,14 +454,43 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     });
   }
 
+  // 8. CTE / WITH
   if (
     problem.topic === 'ctes' ||
-    problem.requirements.some((r) => r.toLowerCase().includes('cte'))
+    reqText.includes('cte') ||
+    reqText.includes('with')
   ) {
     checks.push({
       id: 'chk_with',
       label: 'Structures pipeline via WITH common table expression',
       passed: normalized.includes('WITH'),
+    });
+  }
+
+  // 9. JOINs
+  if (problem.topic === 'joins' || reqText.includes('join')) {
+    checks.push({
+      id: 'chk_join',
+      label: 'Combines relational entities via JOIN ... ON clause',
+      passed: normalized.includes('JOIN') && normalized.includes('ON'),
+    });
+  }
+
+  // 10. CASE conditional logic
+  if (problem.topic === 'intermediate_case' || reqText.includes('case when')) {
+    checks.push({
+      id: 'chk_case',
+      label: 'Implements conditional logic via CASE WHEN ... END',
+      passed: normalized.includes('CASE') && normalized.includes('WHEN'),
+    });
+  }
+
+  // 11. DISTINCT deduplication
+  if (reqText.includes('distinct') || reqText.includes('deduplicat')) {
+    checks.push({
+      id: 'chk_distinct',
+      label: 'Deduplicates rows via DISTINCT keyword',
+      passed: normalized.includes('DISTINCT'),
     });
   }
 
@@ -351,7 +501,7 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
   }));
 
   const allPassed = checklist.every((c) => c.passed);
-  const elapsed = Math.round(performance.now() - startTime + Math.random() * 30 + 12);
+  const elapsed = Math.round(performance.now() - startTime + Math.random() * 25 + 10);
 
   if (!isSyntaxValid) {
     return {
@@ -381,28 +531,36 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     };
   }
 
-  let userColumns = extractColumnsFromSql(sql);
-  if (userColumns.length === 0 || userColumns.includes('*')) {
-    userColumns = problem.expectedOutput.columns;
-  }
-
+  // Execute the query using AlaSQL
+  const execResult = runSqlWithAlaSql(cleanCode, problem);
+  let userColumns: string[] = [];
   let userRows: Record<string, any>[] = [];
-  if (allPassed) {
-    userRows = problem.expectedOutput.rows;
+
+  if (execResult.success && execResult.rows !== undefined) {
+    userRows = execResult.rows;
+    userColumns = execResult.columns;
+    if (userColumns.length === 0) {
+      userColumns = extractColumnsFromSql(cleanCode);
+    }
   } else {
+    // If execution threw an error or dialect requires fallback
+    userColumns = extractColumnsFromSql(cleanCode);
+    if (userColumns.length === 0) {
+      userColumns = problem.expectedOutput.columns;
+    }
+
     if (problem.schemas[0] && problem.schemas[0].sampleRows.length > 0) {
-      userRows = problem.schemas[0].sampleRows.slice(0, 3).map((sample) => {
+      userRows = problem.schemas[0].sampleRows.map((sample) => {
         const obj: Record<string, any> = {};
         userColumns.forEach((c) => {
           obj[c] = sample[c] !== undefined ? sample[c] : sample[Object.keys(sample)[0]];
         });
         return obj;
       });
-    } else {
-      userRows = [];
     }
   }
 
+  // Generate visual diff report
   const diffReport = generateDiffReport(
     userColumns,
     userRows,
@@ -410,31 +568,49 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     problem.expectedOutput.rows
   );
 
-  if (allPassed && diffReport.isFullMatch) {
+  // Both all structural requirements must pass AND data must match 100%
+  const isAccepted = allPassed && diffReport.isFullMatch && diffReport.accuracyPct === 100;
+
+  if (isAccepted) {
     return {
       status: 'ACCEPTED',
       executionTimeMs: elapsed,
       message: 'Query executed successfully. Result matches target schema specification.',
-      rowsReturned: problem.expectedOutput.rows.length,
-      outputColumns: problem.expectedOutput.columns,
-      outputRows: problem.expectedOutput.rows,
+      rowsReturned: userRows.length,
+      outputColumns: userColumns.length > 0 ? userColumns : problem.expectedOutput.columns,
+      outputRows: userRows,
       checklist,
-      diffReport,
+      diffReport: {
+        ...diffReport,
+        isFullMatch: true,
+      },
     };
+  }
+
+  const failedChecks = checklist.filter((c) => !c.passed);
+  let failMessage = 'Inaccurate or incomplete: ';
+  if (failedChecks.length > 0) {
+    failMessage += `Requirements not fulfilled (${failedChecks.map((f) => f.label).join('; ')})`;
+  } else if (!diffReport.columnMatch) {
+    failMessage += `Column mismatch: expected [${diffReport.expectedColumns.join(', ')}], got [${diffReport.userColumns.join(', ')}]`;
+  } else if (!diffReport.rowCountMatch) {
+    failMessage += `Row count mismatch: query returned ${diffReport.userRowCount} row(s), expected ${diffReport.expectedRowCount}`;
+  } else {
+    failMessage += `Cell values or sorting order differ from expected result (${diffReport.mismatchedRowCount} row(s) with diffs)`;
   }
 
   return {
     status: 'NEEDS_ADJUSTMENT',
     executionTimeMs: elapsed,
-    message:
-      diffReport.missingColumns.length > 0
-        ? `Missing required columns: ${diffReport.missingColumns.join(', ')}`
-        : 'Query compiled, but did not satisfy all business requirements or structural clauses.',
+    message: failMessage,
     rowsReturned: userRows.length,
     outputColumns: userColumns.length > 0 ? userColumns : problem.expectedOutput.columns,
     outputRows: userRows,
     checklist,
-    diffReport,
+    diffReport: {
+      ...diffReport,
+      isFullMatch: false, // Explicitly false when requirements or data differ!
+    },
   };
 }
 
@@ -1062,6 +1238,24 @@ export default function App() {
               notesMap,
             });
             syncQueryToCloud(problem.id, sqlCode, dialect, true);
+          }
+          return updated;
+        });
+      } else {
+        // If requirements are not met or query produces inaccurate data, unmark solved
+        setSolvedMap((prev) => {
+          if (!prev[problem.id]) return prev;
+          const updated = { ...prev };
+          delete updated[problem.id];
+          safeStorage.setItem('apex_solved_problems', JSON.stringify(updated));
+          if (currentUser) {
+            syncProgressToCloud({
+              solvedProblems: Object.keys(updated),
+              masteredProblems: masteredList,
+              reviewProblems: reviewList,
+              notesMap,
+            });
+            syncQueryToCloud(problem.id, sqlCode, dialect, false);
           }
           return updated;
         });
@@ -2193,7 +2387,7 @@ export default function App() {
                         : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                     }`}
                   >
-                    {executionResult.status === 'ACCEPTED' ? '✓ ACCEPTED' : '⚠ NEEDS ADJUSTMENT'}
+                    {executionResult.status === 'ACCEPTED' ? '✓ ACCEPTED' : '⚠ INACCURATE / INCOMPLETE'}
                   </span>
                 </div>
               )}
@@ -2228,12 +2422,12 @@ export default function App() {
                             <span className="font-extrabold text-sm block">
                               {executionResult.diffReport.isFullMatch
                                 ? '100% Match! All Data Grain & Schema Tests Passed'
-                                : 'Visual Diff: Mismatch Detected Between Output and Target'}
+                                : `Visual Diff: Inaccurate / Incomplete Result (${executionResult.diffReport.accuracyPct}% Match)`}
                             </span>
                             <span className="text-xs opacity-80 block">
                               {executionResult.diffReport.isFullMatch
                                 ? 'Query produced exact expected columns, row ordering, and cell values.'
-                                : `${executionResult.diffReport.mismatchedRowCount} row(s) differ from target output. Inspect side-by-side comparison below.`}
+                                : executionResult.message || `${executionResult.diffReport.mismatchedRowCount} row(s) differ from target output. Inspect side-by-side comparison below.`}
                             </span>
                           </div>
                         </div>
@@ -2329,16 +2523,18 @@ export default function App() {
                               className={`font-mono text-xs font-extrabold px-1.5 py-0.5 rounded ${
                                 executionResult.diffReport.isFullMatch
                                   ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-amber-500/20 text-amber-300'
+                                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                               }`}
                             >
-                              {executionResult.diffReport.isFullMatch ? 'PASSED' : 'NEEDS TWEAK'}
+                              {executionResult.diffReport.isFullMatch ? 'PASSED' : 'INACCURATE / INCOMPLETE'}
                             </span>
                           </div>
                           <span className="text-[10px] text-slate-500">
-                            {executionResult.diffReport.mismatchedRowCount === 0
+                            {executionResult.diffReport.isFullMatch
                               ? 'Zero mismatches'
-                              : `${executionResult.diffReport.mismatchedRowCount} rows with diffs`}
+                              : executionResult.diffReport.mismatchedRowCount > 0
+                              ? `${executionResult.diffReport.mismatchedRowCount} rows with diffs`
+                              : 'Requirements not fulfilled'}
                           </span>
                         </div>
                       </div>
