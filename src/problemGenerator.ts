@@ -14,6 +14,7 @@ import {
   TopicCategory,
   TopicConfig,
 } from './types';
+import { livePipeline } from './services/liveQuestionPipeline';
 
 // ============================================================================
 // TOPIC DRILL CONFIGURATIONS (Beginner, Intermediate, Advanced)
@@ -1327,6 +1328,18 @@ export function generateSqlProblem(
   industry: IndustryDomain
 ): SqlProblem {
   const safeQNum = Math.max(1, questionNumber);
+
+  // If mode is 'live_stream', pull from the continuous real-time public ingestion stream
+  if (mode === 'live_stream') {
+    const streamProblems = livePipeline.getProblems();
+    if (streamProblems.length > 0) {
+      const idx = (safeQNum - 1) % streamProblems.length;
+      return {
+        ...streamProblems[idx],
+        questionNumber: safeQNum,
+      };
+    }
+  }
 
   // If topic is 'all', rotate sequentially through all 12 core sub-topics based on safeQNum
   let resolvedTopic = topic;

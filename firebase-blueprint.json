@@ -98,6 +98,82 @@
         }
       },
       "required": ["userId", "problemId", "sqlCode"]
+    },
+    "LiveProblem": {
+      "title": "LiveProblem",
+      "description": "Real-time auto-ingested SQL problem from public platforms, contests, and interview rounds",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "platform": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "difficulty": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "skillLevel": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "industry": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "topicLabel": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "businessScenario": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "requirements": {
+          "type": "array"
+        },
+        "schemas": {
+          "type": "array"
+        },
+        "expectedOutput": {
+          "type": "object"
+        },
+        "hints": {
+          "type": "object"
+        },
+        "starterCodeByDialect": {
+          "type": "object"
+        },
+        "officialSolutionByDialect": {
+          "type": "object"
+        },
+        "deepDive": {
+          "type": "object"
+        },
+        "sourcePlatform": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "contestRound": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ingestedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "title", "platform", "difficulty", "requirements", "schemas", "expectedOutput", "ingestedAt"]
     }
   },
   "firestore": {
@@ -112,6 +188,10 @@
     "/users/{userId}/queries/{queryId}": {
       "schema": "UserQuery",
       "description": "Individual SQL queries and drafts keyed by user and question"
+    },
+    "/live_problems/{problemId}": {
+      "schema": "LiveProblem",
+      "description": "Real-time auto-ingested SQL problem collection synchronized across all connected users"
     }
   }
 }
