@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthModalOpen(false);
   }, []);
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
@@ -134,9 +134,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const loginWithEmail = async (email: string, pass: string) => {
+  const loginWithEmail = useCallback(async (email: string, pass: string) => {
     setIsLoading(true);
     try {
       const result = await signInWithEmailAndPassword(auth, email, pass);
@@ -152,9 +152,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const registerWithEmail = async (email: string, pass: string, displayName: string, role = 'SQL Developer') => {
+  const registerWithEmail = useCallback(async (email: string, pass: string, displayName: string, role = 'SQL Developer') => {
     setIsLoading(true);
     try {
       const result = await createUserWithEmailAndPassword(auth, email, pass);
@@ -179,9 +179,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const loginAsGuest = (displayName = 'Candidate Guest', role = 'Data Analyst') => {
+  const loginAsGuest = useCallback((displayName = 'Candidate Guest', role = 'Data Analyst') => {
     const guestUser = {
       uid: 'guest-' + Math.random().toString(36).substring(2, 9),
       email: 'guest@candidate.local',
@@ -200,9 +200,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     setSyncStatus('idle');
     setIsAuthModalOpen(false);
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await firebaseSignOut(auth);
       setCurrentUser(null);
@@ -211,9 +211,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Logout failed:', err);
     }
-  };
+  }, []);
 
-  const syncProgressToCloud = async (progress: {
+  const syncProgressToCloud = useCallback(async (progress: {
     solvedProblems: string[];
     masteredProblems: string[];
     reviewProblems: string[];
@@ -229,9 +229,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn('Failed to sync progress to cloud:', err);
       setSyncStatus('error');
     }
-  };
+  }, [currentUser]);
 
-  const syncQueryToCloud = async (problemId: string, sqlCode: string, dialect: string, isSolved = false) => {
+  const syncQueryToCloud = useCallback(async (problemId: string, sqlCode: string, dialect: string, isSolved = false) => {
     if (!currentUser) return;
     setSyncStatus('saving');
     try {
@@ -242,9 +242,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn('Failed to save query to cloud:', err);
       setSyncStatus('error');
     }
-  };
+  }, [currentUser]);
 
-  const fetchCloudProgress = async () => {
+  const fetchCloudProgress = useCallback(async () => {
     if (!currentUser) return null;
     try {
       return await loadUserProgressCloud(currentUser.uid);
@@ -252,9 +252,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn('Failed to fetch cloud progress:', err);
       return null;
     }
-  };
+  }, [currentUser]);
 
-  const fetchCloudQueries = async () => {
+  const fetchCloudQueries = useCallback(async () => {
     if (!currentUser) return null;
     try {
       return await loadUserQueriesCloud(currentUser.uid);
@@ -262,7 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn('Failed to fetch cloud queries:', err);
       return null;
     }
-  };
+  }, [currentUser]);
 
   return (
     <AuthContext.Provider

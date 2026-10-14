@@ -126,6 +126,10 @@ export interface SqlProblem {
   ingestedAt?: string;
   isLiveAutoIngested?: boolean;
   companyTag?: string;
+  // Google Search Grounding Metadata
+  webSearchQueries?: string[];
+  groundingCitations?: { title: string; url: string; snippet?: string }[];
+  searchSource?: string;
 }
 
 export interface TopicConfig {
