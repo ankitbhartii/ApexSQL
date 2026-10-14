@@ -34,6 +34,64 @@ import {
   searchGoogleGroundingSql,
   type GoogleSearchGroundedPayload,
 } from './services/googleSearchGrounding';
+import confetti from 'canvas-confetti';
+
+export interface SubmissionVerdict {
+  type: 'correct' | 'wrong';
+  title: string;
+  message: string;
+  accuracyPct: number;
+  executionTimeMs: number;
+  details?: string;
+  timestamp: number;
+}
+
+function playSuccessChime() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = 'triangle';
+    osc2.type = 'sine';
+
+    osc1.frequency.setValueAtTime(523.25, now); // C5
+    osc1.frequency.exponentialRampToValueAtTime(659.25, now + 0.12); // E5
+    osc2.frequency.setValueAtTime(659.25, now + 0.12); // E5
+    osc2.frequency.exponentialRampToValueAtTime(783.99, now + 0.28); // G5
+
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(now);
+    osc2.start(now + 0.1);
+    osc1.stop(now + 0.6);
+    osc2.stop(now + 0.6);
+  } catch {
+    // Non-blocking if audio context is restricted
+  }
+}
+
+function triggerConfetti() {
+  try {
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#10b981', '#6366f1', '#06b6d4', '#f59e0b', '#ec4899'],
+    });
+  } catch {
+    // Ignore if canvas-confetti cannot run
+  }
+}
 
 // ============================================================================
 // SAFE STORAGE WRAPPER (Prevents SecurityError in sandboxed mobile WebViews)
@@ -713,6 +771,7 @@ export default function App() {
   const [isGoogleSearching, setIsGoogleSearching] = useState<boolean>(false);
   const [groundedSearchResult, setGroundedSearchResult] = useState<GoogleSearchGroundedPayload | null>(null);
   const [isGoogleSearchPanelOpen, setIsGoogleSearchPanelOpen] = useState<boolean>(false);
+  const [submissionVerdict, setSubmissionVerdict] = useState<SubmissionVerdict | null>(null);
 
   // Generate current problem
   const problem: SqlProblem = useMemo(() => {
@@ -1287,37 +1346,31 @@ export default function App() {
     [handleCodeChange, sqlCode]
   );
 
-  // Code editor keyboard shortcuts
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleRunQuery();
-      return;
-    }
-
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const el = e.currentTarget;
-      const start = el.selectionStart;
-      const end = el.selectionEnd;
-      const val = el.value;
-      const updated = val.substring(0, start) + '  ' + val.substring(end);
-      handleCodeChange(updated);
-      setTimeout(() => {
-        el.selectionStart = el.selectionEnd = start + 2;
-      }, 0);
-    }
-  };
-
-  // Run Query with Solved Tracking & Cloud Sync
-  const handleRunQuery = () => {
+  // Run & Submit Query with Solved Tracking, Celebration Animations, and Cloud Sync
+  const executeQuery = useCallback((isSubmit: boolean) => {
     setIsExecuting(true);
     setTimeout(() => {
       const result = evaluateSqlQuery(sqlCode, problem);
       setExecutionResult(result);
       safeStorage.setItem('apex_last_execution_result', JSON.stringify(result));
       setConsoleTab('diff');
-      if (result.status === 'ACCEPTED') {
+
+      const isAccepted = result.status === 'ACCEPTED' && result.diffReport?.isFullMatch;
+
+      if (isAccepted) {
+        if (isSubmit) {
+          triggerConfetti();
+          playSuccessChime();
+        }
+        setSubmissionVerdict({
+          type: 'correct',
+          title: isSubmit ? 'Accepted • Correct Output!' : 'Test Passed • Output Matches',
+          message: 'Your query executed successfully and matched 100% of the target dataset grain and requirements.',
+          accuracyPct: 100,
+          executionTimeMs: result.executionTimeMs,
+          timestamp: Date.now(),
+        });
+
         setSolvedMap((prev) => {
           const updated = {
             ...prev,
@@ -1336,7 +1389,23 @@ export default function App() {
           return updated;
         });
       } else {
-        // If requirements are not met or query produces inaccurate data, unmark solved
+        const details =
+          result.diffReport?.missingColumns?.length
+            ? `Missing column(s): ${result.diffReport.missingColumns.join(', ')}`
+            : result.diffReport && result.diffReport.userRowCount !== result.diffReport.expectedRowCount
+            ? `Row count mismatch: returned ${result.diffReport.userRowCount} row(s), expected ${result.diffReport.expectedRowCount}`
+            : result.message || 'Output rows or columns do not match expected dataset.';
+
+        setSubmissionVerdict({
+          type: 'wrong',
+          title: isSubmit ? 'Wrong Answer • Needs Adjustment' : 'Test Output Mismatch',
+          message: 'Query output does not match expected target specification. Inspect the visual diff below.',
+          accuracyPct: result.diffReport?.accuracyPct ?? 0,
+          executionTimeMs: result.executionTimeMs,
+          details,
+          timestamp: Date.now(),
+        });
+
         setSolvedMap((prev) => {
           if (!prev[problem.id]) return prev;
           const updated = { ...prev };
@@ -1356,6 +1425,31 @@ export default function App() {
       }
       setIsExecuting(false);
     }, 240);
+  }, [sqlCode, problem, currentUser, syncProgressToCloud, syncQueryToCloud, masteredList, reviewList, notesMap, dialect]);
+
+  const handleRunQuery = () => executeQuery(false);
+  const handleSubmitQuery = () => executeQuery(true);
+
+  // Code editor keyboard shortcuts: Ctrl+Enter / Cmd+Enter submits
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmitQuery();
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const el = e.currentTarget;
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const val = el.value;
+      const updated = val.substring(0, start) + '  ' + val.substring(end);
+      handleCodeChange(updated);
+      setTimeout(() => {
+        el.selectionStart = el.selectionEnd = start + 2;
+      }, 0);
+    }
   };
 
   // Format SQL with auto-save
@@ -1458,95 +1552,149 @@ export default function App() {
       {/* ==================================================================== */}
       {/* 1. TOP DOCKED HEADER (DESKTOP & TABLET) */}
       {/* ==================================================================== */}
-      <header className="hidden md:flex items-center justify-between px-4 lg:px-6 h-12 bg-[#0f172a] border-b border-slate-800 shrink-0 z-30 select-none">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+      <header className="hidden md:flex items-center justify-between px-4 lg:px-6 h-14 bg-[#0f172a] border-b border-slate-800 shrink-0 z-30 select-none">
+        {/* Left: Brand + Mode & Topic Selectors */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 mr-1">
             <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/20">
               SQL
             </span>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-sm tracking-tight text-white">ApexSQL</span>
-              <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/25">
-                Sandbox & Coach
-              </span>
-            </div>
+            <span className="font-extrabold text-sm tracking-tight text-white">ApexSQL</span>
           </div>
 
-          <div className="h-4 w-px bg-slate-800 mx-1" />
+          <div className="h-4 w-px bg-slate-800 mx-0.5" />
 
-          {/* Quick Mastery Counters & Storage Manager */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">
-              🏆 {Object.keys(solvedMap).length} Solved
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-              ✓ {masteredList.length} Mastered
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
-              ★ {reviewList.length} Review
-            </span>
-            <button
-              onClick={() => setIsStorageModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold transition cursor-pointer"
-              title="Storage & Progress Settings"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>💾 Storage Synced</span>
-            </button>
+          {/* Mode Dropdown */}
+          <select
+            value={activeMode}
+            onChange={(e) => {
+              setActiveMode(e.target.value as Mode);
+              setQuestionNumber(1);
+              setJumpInput('1');
+            }}
+            className="bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-100 font-semibold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs"
+            title="Switch Challenge Mode"
+          >
+            <option value="skill_matrix">⚡ Skill Matrix</option>
+            <option value="leetcode">🎯 LeetCode Challenges</option>
+            <option value="hackerrank">🏆 HackerRank Multi-Table</option>
+            <option value="faang_mock">💼 FAANG+ Mock Cases</option>
+            <option value="live_stream">📡 Live Contest Stream</option>
+          </select>
+
+          {/* Topic Dropdown */}
+          <select
+            value={activeTopic}
+            onChange={(e) => handleSelectTopic(e.target.value as TopicCategory)}
+            className="bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[170px] truncate"
+            title="Filter by SQL Topic"
+          >
+            {TOPIC_DRILL_CONFIGS.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.icon} {t.label} ({t.count.toLocaleString()})
+              </option>
+            ))}
+          </select>
+
+          {/* Difficulty Segmented Controls */}
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
+            {(['All', 'Beginner', 'Intermediate', 'Advanced'] as const).map((tier) => (
+              <button
+                key={tier}
+                onClick={() => setSelectedSkillTier(tier)}
+                className={`px-2 py-0.5 rounded-md font-medium text-[11px] transition cursor-pointer ${
+                  selectedSkillTier === tier
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {tier === 'All' ? 'All' : tier === 'Beginner' ? 'Easy' : tier === 'Intermediate' ? 'Med' : 'Hard'}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Center: Interview Countdown Timer */}
-        <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-750 px-2.5 py-1 rounded-lg">
-          <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
-            ⏱ Timer:
-          </span>
-          <span
-            className={`font-mono text-xs font-bold ${
-              timerSecondsLeft < 300 ? 'text-rose-400 animate-pulse' : 'text-slate-100'
-            }`}
+        {/* Center: Problem Navigation & Interview Timer */}
+        <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-lg">
+          <button
+            onClick={handlePrevQuestion}
+            className="px-2 py-0.5 rounded text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 font-bold transition cursor-pointer"
+            title="Previous Problem"
           >
-            {formattedTimer}
+            ◀
+          </button>
+          <span className="text-xs font-mono font-bold text-slate-200 px-1">
+            Q #{questionNumber}
+            <span className="text-slate-500 font-normal"> / {activeMode === 'live_stream' ? liveProblems.length : currentTopicConfig.count}</span>
           </span>
           <button
-            onClick={handleToggleTimer}
-            className={`px-2 py-0.5 text-[11px] font-semibold rounded cursor-pointer transition ${
-              isTimerRunning
-                ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
-                : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-            }`}
+            onClick={handleNextQuestion}
+            className="px-2 py-0.5 rounded text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 font-bold transition cursor-pointer"
+            title="Next Problem"
           >
-            {isTimerRunning ? 'Pause' : 'Start'}
+            ▶
           </button>
-          <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-800 text-[11px] text-slate-400">
-            <button onClick={() => handleResetTimer(20)} className="hover:text-slate-200 cursor-pointer">
-              20m
-            </button>
-            <span>/</span>
-            <button onClick={() => handleResetTimer(45)} className="hover:text-slate-200 cursor-pointer">
-              45m
-            </button>
-          </div>
+          <button
+            onClick={handleShuffle}
+            className="p-1 rounded text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer"
+            title="Randomize Problem"
+          >
+            🔀
+          </button>
+
+          <div className="h-3.5 w-px bg-slate-800 mx-1" />
+
+          {/* Compact 1-click Timer */}
+          <button
+            onClick={handleToggleTimer}
+            className={`px-2 py-0.5 rounded text-xs font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+              isTimerRunning
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+            title={isTimerRunning ? 'Timer active - click to pause' : 'Timer paused - click to start'}
+          >
+            <span>⏱</span>
+            <span>{formattedTimer}</span>
+          </button>
         </div>
 
-        {/* Right: Industry Domain Selector and User Profile */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-slate-400 font-medium">Domain:</span>
-            <select
-              value={industryDomain}
-              onChange={(e) => setIndustryDomain(e.target.value as IndustryDomain)}
-              className="bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-0.5 font-semibold text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
-            >
-              {INDUSTRY_DOMAINS.map((dom) => (
-                <option key={dom} value={dom}>
-                  {dom}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Right: Live Search, Solved Count, Domain, Profile */}
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setIsGoogleSearchPanelOpen(true)}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-950/70 hover:bg-blue-900/80 text-blue-200 border border-blue-500/40 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Search real-time SQL challenges with Google Search Grounding"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+            </span>
+            <span>Live Contest Stream</span>
+          </button>
 
-          <div className="h-4 w-px bg-slate-850" />
+          <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-lg">
+            ✓ {Object.keys(solvedMap).length} Solved
+          </span>
+
+          <select
+            value={industryDomain}
+            onChange={(e) => setIndustryDomain(e.target.value as IndustryDomain)}
+            className="bg-slate-900 border border-slate-750 text-slate-300 rounded-lg px-2 py-1 text-xs font-medium cursor-pointer"
+            title="Target Industry Domain"
+          >
+            {INDUSTRY_DOMAINS.map((dom) => (
+              <option key={dom} value={dom}>{dom}</option>
+            ))}
+          </select>
+
+          <button
+            onClick={() => setIsStorageModalOpen(true)}
+            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+            title="Storage Settings & Cloud Backup"
+          >
+            💾
+          </button>
 
           <UserProfileMenu
             solvedCount={Object.keys(solvedMap).length}
@@ -1654,200 +1802,111 @@ export default function App() {
         </div>
       </div>
 
-      {/* ==================================================================== */}
-      {/* 3. FIVE CORE MODES TAB STRIP (DESKTOP) */}
-      {/* ==================================================================== */}
-      <nav className="hidden md:flex items-center justify-between px-6 h-10 bg-[#090d16] border-b border-slate-800/80 shrink-0 select-none">
-        <div className="flex items-center gap-1.5">
-          {[
-            { id: 'skill_matrix' as Mode, label: 'Tab 1: Skill Generator Matrix', icon: '⚡' },
-            { id: 'leetcode' as Mode, label: 'Tab 2: LeetCode Challenges', icon: '🎯' },
-            { id: 'hackerrank' as Mode, label: 'Tab 3: HackerRank Multi-Table', icon: '🏆' },
-            { id: 'faang_mock' as Mode, label: 'Tab 4: FAANG+ Mock Cases', icon: '💼' },
-            { id: 'live_stream' as Mode, label: 'Tab 5: 🔥 Live Contest & Interview Stream', icon: '📡', isLive: true },
-          ].map((mode) => {
-            const isActive = activeMode === mode.id;
-            return (
-              <button
-                key={mode.id}
-                onClick={() => {
-                  setActiveMode(mode.id);
-                  setQuestionNumber(1);
-                  setJumpInput('1');
-                }}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  isActive
-                    ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                }`}
-              >
-                <span>{mode.icon}</span>
-                <span>{mode.label}</span>
-                {'isLive' in mode && mode.isLive && (
-                  <span className="relative flex h-2 w-2 ml-0.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
 
-        {/* Stepper Controls in Desktop Bar */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-lg text-xs">
-            <span className="text-slate-400">Q #{questionNumber} of</span>
-            <span className="font-semibold text-slate-200">
-              {activeMode === 'live_stream'
-                ? liveProblems.length.toLocaleString()
-                : currentTopicConfig.count.toLocaleString()}
-            </span>
-          </div>
-
-          <button
-            onClick={handlePrevQuestion}
-            className="px-2.5 py-0.5 text-xs font-semibold rounded bg-slate-800 text-slate-200 hover:bg-slate-700 transition cursor-pointer"
-          >
-            ◀ Prev
-          </button>
-          <button
-            onClick={handleNextQuestion}
-            className="px-3 py-0.5 text-xs font-bold rounded bg-indigo-600 text-white hover:bg-indigo-500 transition cursor-pointer shadow-sm shadow-indigo-600/30"
-          >
-            Next ▶
-          </button>
-          <button
-            onClick={handleShuffle}
-            className="px-2.5 py-0.5 text-xs font-semibold rounded bg-slate-800 text-slate-200 hover:bg-slate-700 transition cursor-pointer"
-            title="Randomize Problem"
-          >
-            🔀 Shuffle
-          </button>
-
-          <form onSubmit={handleJumpSubmit} className="flex items-center gap-1 ml-1">
-            <input
-              type="number"
-              min={1}
-              max={activeMode === 'live_stream' ? liveProblems.length : currentTopicConfig.count}
-              value={jumpInput}
-              onChange={(e) => setJumpInput(e.target.value)}
-              className="w-16 px-1.5 py-0.5 bg-slate-900 border border-slate-750 text-slate-100 rounded text-xs text-center focus:outline-none focus:border-indigo-500"
-              placeholder="Jump #"
-            />
-            <button
-              type="submit"
-              className="px-2 py-0.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-semibold cursor-pointer"
-            >
-              Go
-            </button>
-          </form>
-        </div>
-      </nav>
 
       {/* ==================================================================== */}
       {/* 4. TOPIC DRILL BAR OR LIVE STREAM INGESTION BAR (DESKTOP) */}
       {/* ==================================================================== */}
-      {activeMode === 'live_stream' ? (
-        <div className="hidden md:flex flex-col px-6 py-2.5 bg-gradient-to-r from-slate-950 via-[#0a0f20] to-slate-950 border-b border-indigo-900/40 gap-2 shrink-0 select-none">
-          {/* Live Ingestion Top Row: Real-time pulse & controls */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-xs font-bold shadow-sm">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span>{livePipelineStatus.isAutoSyncActive ? 'LIVE REAL-TIME STREAM: ACTIVE' : 'LIVE AUTO-SYNC: PAUSED'}</span>
-              </div>
-
-              <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-mono">
-                <span className="text-indigo-400">⚡</span>
-                <span>Auto-scan in <strong className="text-cyan-300">{autoSyncCountdown}s</strong></span>
-                <span className="text-slate-600">•</span>
-                <span className="text-slate-300 font-bold">{liveProblems.length} Public Questions Ingested</span>
-                <span className="text-slate-600">•</span>
-                <span className="text-slate-400">Sources: LeetCode Contests, FAANG Dumps, HackerRank</span>
+      {/* ==================================================================== */}
+      {/* 4. COMPACT LIVE STREAM SUBHEADER (ONLY IN LIVE STREAM MODE) */}
+      {/* ==================================================================== */}
+      {activeMode === 'live_stream' && (
+        <div className="hidden md:flex items-center justify-between px-4 lg:px-6 py-2 bg-[#0a0f20] border-b border-indigo-900/40 text-xs shrink-0 select-none">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-[11px]">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
+              <span>LIVE CONTEST FEED</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  const nextState = !livePipelineStatus.isAutoSyncActive;
-                  livePipeline.setAutoSyncActive(nextState);
-                  setLivePipelineStatus(livePipeline.getStatus());
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  livePipelineStatus.isAutoSyncActive
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                }`}
-              >
-                {livePipelineStatus.isAutoSyncActive ? '⏸ Pause Auto-Ingest' : '▶ Resume Auto-Ingest'}
-              </button>
+            <span className="text-slate-400 text-xs">
+              <strong className="text-slate-200">{liveProblems.length}</strong> public challenges ingested
+            </span>
 
-              <button
-                onClick={() => setIsGoogleSearchPanelOpen(!isGoogleSearchPanelOpen)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
-                  isGoogleSearchPanelOpen
-                    ? 'bg-blue-600 text-white border-blue-400 shadow-md'
-                    : 'bg-blue-950/80 hover:bg-blue-900/80 text-blue-200 border-blue-500/40'
-                }`}
-              >
-                <span>🔍</span>
-                <span>Google Search Grounding</span>
-              </button>
-
-              <button
-                onClick={async () => {
-                  const newProb = await livePipeline.autoIngestNextQuestion();
-                  if (newProb) {
-                    setSelectedLiveProblemId(newProb.id);
-                  }
-                }}
-                disabled={livePipelineStatus.isFetchingNow}
-                className="px-3 py-1 rounded-lg bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
-              >
-                {livePipelineStatus.isFetchingNow ? (
-                  <>
-                    <span className="animate-spin text-xs">⏳</span>
-                    <span>Ingesting & Synthesizing in AlaSQL...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>⚡</span>
-                    <span>Auto-Fetch New Round Now</span>
-                  </>
-                )}
-              </button>
+            {/* Quick platform filter */}
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 ml-1">
+              {['All', 'LeetCode', 'FAANG+ Mock', 'HackerRank'].map((plat) => (
+                <button
+                  key={plat}
+                  onClick={() => setLivePlatformFilter(plat)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition cursor-pointer ${
+                    livePlatformFilter === plat
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {plat === 'All' ? 'All' : plat}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Interactive Google Search Grounding Panel */}
-          {isGoogleSearchPanelOpen && (
-            <div className="bg-[#0b1224] p-3 rounded-xl border border-blue-500/40 flex flex-col gap-2.5 shadow-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🌐</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsGoogleSearchPanelOpen(true)}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+            >
+              <span>🔍</span>
+              <span>Search Real-Time SQL</span>
+            </button>
+
+            <button
+              onClick={async () => {
+                const newProb = await livePipeline.autoIngestNextQuestion();
+                if (newProb) setSelectedLiveProblemId(newProb.id);
+              }}
+              disabled={livePipelineStatus.isFetchingNow}
+              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              {livePipelineStatus.isFetchingNow ? '⏳ Ingesting...' : '⚡ Fetch New'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* GOOGLE SEARCH GROUNDING MODAL (CLEAN OVERLAY, ZERO CLUTTER) */}
+      {/* ==================================================================== */}
+      <AnimatePresence>
+        {isGoogleSearchPanelOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsGoogleSearchPanelOpen(false)}
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="relative z-10 w-full max-w-2xl bg-[#0b1224] border border-blue-500/40 rounded-2xl shadow-2xl p-5 flex flex-col gap-4 max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">🌐</span>
                   <div>
-                    <span className="font-extrabold text-xs text-white flex items-center gap-2">
+                    <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
                       Google Search Grounding Engine
                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                        gemini-3.8-flash + googleSearch
+                        Real-Time SQL
                       </span>
-                    </span>
-                    <span className="text-[10px] text-slate-400 block">
-                      Search up-to-date, authentic industry SQL rounds and contest challenges across LeetCode, HackerRank, Google, Meta & Amazon.
-                    </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Ground search against live SQL interview dumps & contest challenges from LeetCode, HackerRank, Meta, and Google.
+                    </p>
                   </div>
                 </div>
 
                 <button
                   onClick={() => setIsGoogleSearchPanelOpen(false)}
-                  className="text-slate-400 hover:text-slate-200 text-xs font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-800 cursor-pointer"
+                  className="w-7 h-7 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold cursor-pointer transition"
                 >
-                  ✕ Close
+                  ✕
                 </button>
               </div>
 
@@ -1865,32 +1924,33 @@ export default function App() {
                     type="text"
                     value={googleSearchQuery}
                     onChange={(e) => setGoogleSearchQuery(e.target.value)}
-                    placeholder="Search recent SQL interview questions, LeetCode contest updates, or FAANG rounds..."
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                    placeholder="Search recent SQL interview questions, LeetCode contest updates..."
+                    className="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                    autoFocus
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isGoogleSearching}
-                  className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition shrink-0"
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition shrink-0"
                 >
                   {isGoogleSearching ? (
                     <>
                       <span className="animate-spin text-xs">⏳</span>
-                      <span>Searching Google...</span>
+                      <span>Searching...</span>
                     </>
                   ) : (
                     <>
                       <span>🔎</span>
-                      <span>Search with Google</span>
+                      <span>Search</span>
                     </>
                   )}
                 </button>
               </form>
 
-              {/* Quick Search Grounding Suggestion Chips */}
+              {/* Quick Suggestion Chips */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Grounding Topics:</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Suggested:</span>
                 {[
                   { label: '🏆 LeetCode Contest 419 Gaps', q: 'LeetCode Weekly Contest 419 database session gap sql' },
                   { label: '🌐 Google BigQuery Slot Skew', q: 'Google Cloud data engineering BigQuery slot skew partition pruning' },
@@ -1905,165 +1965,54 @@ export default function App() {
                       setGoogleSearchQuery(chip.q);
                       handleExecuteGoogleSearch(chip.q);
                     }}
-                    className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-900 hover:bg-blue-900/40 text-slate-300 hover:text-blue-200 border border-slate-800 transition cursor-pointer"
+                    className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900 hover:bg-blue-900/40 text-slate-300 hover:text-blue-200 border border-slate-800 transition cursor-pointer"
                   >
                     {chip.label}
                   </button>
                 ))}
               </div>
 
-              {/* Latest Search Result Citations Card if present */}
+              {/* Latest Grounded Result Preview */}
               {groundedSearchResult && (
-                <div className="p-2.5 rounded-lg bg-slate-950/90 border border-blue-500/30 flex flex-col gap-1.5 mt-1">
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-blue-500/30 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <span className="text-emerald-400">✓</span>
-                      Grounded Result: {groundedSearchResult.title}
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                      ✓ Challenge Loaded: {groundedSearchResult.title}
                     </span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
                       {groundedSearchResult.company} • {groundedSearchResult.difficulty}
                     </span>
                   </div>
 
                   {groundedSearchResult.groundingCitations && groundedSearchResult.groundingCitations.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-400">
-                      <span className="font-semibold text-slate-300 text-[10px]">Google Search Citations:</span>
+                    <div className="flex items-center gap-2 flex-wrap text-xs text-slate-400 pt-1 border-t border-slate-850">
+                      <span className="font-semibold text-slate-300 text-[11px]">Sources:</span>
                       {groundedSearchResult.groundingCitations.map((cit, cIdx) => (
                         <a
                           key={cIdx}
                           href={cit.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-cyan-300 hover:text-cyan-200 underline truncate max-w-[240px]"
+                          className="text-cyan-400 hover:text-cyan-300 underline truncate max-w-[280px]"
                         >
                           {cit.title}
                         </a>
                       ))}
                     </div>
                   )}
+
+                  <button
+                    onClick={() => setIsGoogleSearchPanelOpen(false)}
+                    className="mt-1 w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition cursor-pointer"
+                  >
+                    Solve This Challenge in Editor ➔
+                  </button>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Platform Filters & Live Questions Pills Strip */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider shrink-0">Filter Feed:</span>
-            {['All', 'LeetCode', 'FAANG+ Mock', 'HackerRank'].map((plat) => (
-              <button
-                key={plat}
-                onClick={() => setLivePlatformFilter(plat)}
-                className={`px-2.5 py-0.5 rounded text-[11px] font-bold shrink-0 cursor-pointer transition ${
-                  livePlatformFilter === plat
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border border-slate-800'
-                }`}
-              >
-                {plat === 'All' ? '🌐 All Live Platforms' : plat}
-              </button>
-            ))}
-
-            <div className="h-4 w-[1px] bg-slate-800 mx-1 shrink-0" />
-
-            {/* Ingested Questions Quick Switcher */}
-            {liveProblems
-              .filter((p) => livePlatformFilter === 'All' || p.platform === livePlatformFilter || p.sourcePlatform?.includes(livePlatformFilter))
-              .map((p, idx) => {
-                const isSelected = problem.id === p.id;
-                const isSolved = solvedMap[p.id]?.status === 'ACCEPTED';
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setSelectedLiveProblemId(p.id);
-                      setQuestionNumber(idx + 1);
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition flex items-center gap-2 border ${
-                      isSelected
-                        ? 'bg-indigo-950/90 text-indigo-200 border-indigo-500 shadow-md ring-1 ring-indigo-500/30'
-                        : 'bg-slate-900/70 text-slate-300 hover:bg-slate-800/80 border-slate-800'
-                    }`}
-                  >
-                    {isSolved && <span className="text-emerald-400 text-xs font-bold">✓</span>}
-                    <span className="text-[10px] font-mono px-1 rounded bg-slate-800 text-cyan-300 border border-slate-700">
-                      {p.companyTag || p.platform}
-                    </span>
-                    <span className="max-w-[200px] truncate">{p.title}</span>
-                    <span className={`text-[9px] px-1 rounded font-bold ${
-                      p.difficulty === 'Easy' ? 'text-emerald-400' : p.difficulty === 'Medium' ? 'text-amber-400' : 'text-rose-400'
-                    }`}>
-                      {p.difficulty}
-                    </span>
-                  </button>
-                );
-              })}
+            </motion.div>
           </div>
-        </div>
-      ) : (
-        <div className="hidden md:flex flex-col px-6 py-2 bg-[#0d1322] border-b border-slate-800/60 gap-1 shrink-0 select-none">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400 font-semibold tracking-wide uppercase text-[10px]">
-                Drill Difficulty:
-              </span>
-              {(['All', 'Beginner', 'Intermediate', 'Advanced'] as (SkillLevel | 'All')[]).map((tier) => (
-                <button
-                  key={tier}
-                  onClick={() => setSelectedSkillTier(tier)}
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold cursor-pointer transition ${
-                    selectedSkillTier === tier
-                      ? tier === 'Beginner'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : tier === 'Intermediate'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                        : tier === 'Advanced'
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                        : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                      : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 border border-slate-800'
-                  }`}
-                >
-                  {tier === 'Beginner' && '🟢 '}
-                  {tier === 'Intermediate' && '🟡 '}
-                  {tier === 'Advanced' && '🔴 '}
-                  {tier}
-                </button>
-              ))}
-            </div>
-
-            <span className="text-[11px] text-slate-400 italic">
-              {currentTopicConfig.description}
-            </span>
-          </div>
-
-          {/* Scrollable Horizontal Pill Strip */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
-            {filteredTopicConfigs.map((topic) => {
-              const isSelected = activeTopic === topic.id;
-              return (
-                <button
-                  key={topic.id}
-                  onClick={() => handleSelectTopic(topic.id)}
-                  className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5 cursor-pointer ${
-                    isSelected
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-slate-900/80 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
-                  }`}
-                >
-                  <span>{topic.icon}</span>
-                  <span>{topic.label}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                      isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {topic.count >= 1000 ? `${(topic.count / 1000).toFixed(1)}k` : topic.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* ==================================================================== */}
       {/* 5. FLOATING INSERT TOAST NOTIFICATION */}
@@ -2204,32 +2153,26 @@ export default function App() {
           <div className="p-4 lg:p-6 flex flex-col gap-4">
             {/* Header Metadata */}
             <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold border border-slate-700">
-                  {problem.id}
-                </span>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  {problem.platform}
-                </span>
+              <div className="flex items-center gap-2 text-xs text-slate-400 font-medium flex-wrap">
+                <span className="font-mono text-slate-300 font-semibold">{problem.id}</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-indigo-400 font-semibold">{problem.platform}</span>
+                <span className="text-slate-600">•</span>
                 <span
-                  className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                  className={`font-bold ${
                     problem.difficulty === 'Easy'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      ? 'text-emerald-400'
                       : problem.difficulty === 'Medium'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      ? 'text-amber-400'
+                      : 'text-rose-400'
                   }`}
                 >
                   {problem.difficulty}
                 </span>
-                <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                  {problem.skillLevel}
-                </span>
-                <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-850 text-slate-400">
-                  {problem.industry}
-                </span>
+                <span className="text-slate-600">•</span>
+                <span>{problem.skillLevel}</span>
                 {solvedMap[problem.id] && (
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                  <span className="ml-auto text-emerald-400 font-bold flex items-center gap-1 text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                     ✓ Solved
                   </span>
                 )}
@@ -2675,14 +2618,22 @@ export default function App() {
               <button
                 onClick={handleRunQuery}
                 disabled={isExecuting}
-                className="px-3.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition cursor-pointer disabled:opacity-50"
+                className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                title="Run query to preview output (Ctrl+Enter)"
+              >
+                <span>▶ Run</span>
+              </button>
+              <button
+                onClick={handleSubmitQuery}
+                disabled={isExecuting}
+                className="px-3.5 py-1 text-xs font-bold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white flex items-center gap-1.5 shadow-md shadow-emerald-600/25 transition cursor-pointer disabled:opacity-50"
+                title="Submit solution for full test evaluation (Ctrl+Shift+Enter)"
               >
                 {isExecuting ? (
-                  <span>Running...</span>
+                  <span>Evaluating...</span>
                 ) : (
                   <>
-                    <span>▶ Run Code</span>
-                    <span className="text-[10px] opacity-75 hidden sm:inline">(Ctrl+Enter)</span>
+                    <span>✓ Submit</span>
                   </>
                 )}
               </button>
@@ -2718,6 +2669,116 @@ export default function App() {
 
           {/* Simulated Execution Console & Visual Diff Validator */}
           <div className="flex-1 flex flex-col p-4 lg:p-6 gap-4 bg-[#090d16] pb-24">
+            {/* Animated Submission Verdict Banner (Correct with celebration / Wrong with shake) */}
+            <AnimatePresence>
+              {submissionVerdict && (
+                <motion.div
+                  key={submissionVerdict.timestamp}
+                  initial={{ opacity: 0, y: -12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.25 }}
+                  className={`rounded-xl p-4 border shadow-xl relative overflow-hidden ${
+                    submissionVerdict.type === 'correct'
+                      ? 'bg-gradient-to-r from-emerald-950/80 via-emerald-900/40 to-slate-950 border-emerald-500/50 text-emerald-100 ring-1 ring-emerald-500/30'
+                      : 'bg-gradient-to-r from-rose-950/80 via-rose-900/40 to-slate-950 border-rose-500/50 text-rose-100 ring-1 ring-rose-500/30 animate-shake'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      {submissionVerdict.type === 'correct' ? (
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                          <span className="text-xl animate-bounce">🎉</span>
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0">
+                          <span className="text-xl animate-pulse">❌</span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-base font-black tracking-tight ${
+                              submissionVerdict.type === 'correct' ? 'text-emerald-400' : 'text-rose-400'
+                            }`}
+                          >
+                            {submissionVerdict.title}
+                          </span>
+                          <span
+                            className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded ${
+                              submissionVerdict.type === 'correct'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            }`}
+                          >
+                            {submissionVerdict.accuracyPct}% Accuracy
+                          </span>
+                          <span className="text-xs font-mono text-slate-400">
+                            ⏱ {submissionVerdict.executionTimeMs} ms
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          {submissionVerdict.message}
+                        </p>
+
+                        {submissionVerdict.details && (
+                          <div className="mt-1 p-2 rounded bg-black/40 border border-rose-500/20 text-xs font-mono text-rose-300">
+                            {submissionVerdict.details}
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 mt-2">
+                          {submissionVerdict.type === 'correct' ? (
+                            <>
+                              <button
+                                onClick={handleNextQuestion}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1"
+                              >
+                                <span>Next Challenge</span>
+                                <span>▶</span>
+                              </button>
+                              <button
+                                onClick={() => setConsoleTab('diff')}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition cursor-pointer"
+                              >
+                                View Diff
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => setConsoleTab('diff')}
+                                className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1"
+                              >
+                                <span>Inspect Visual Diff</span>
+                                <span>🔍</span>
+                              </button>
+                              <button
+                                onClick={() => setConsoleTab('checklist')}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition cursor-pointer"
+                              >
+                                Checklist
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSubmissionVerdict(null)}
+                      className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 text-sm font-bold cursor-pointer transition"
+                      title="Dismiss verdict"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             {/* Status Header & Sub-Tab Navigation */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
               <div className="flex items-center gap-1.5 overflow-x-auto">
