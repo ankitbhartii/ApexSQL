@@ -22,8 +22,14 @@ import {
   setDoc,
   collection,
   getDocs,
-  getDocFromServer
+  getDocFromServer,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+  Unsubscribe
 } from 'firebase/firestore';
+import type { SqlProblem } from './types';
 import defaultFirebaseConfig from '../firebase-applet-config.json';
 
 // Support Vercel / custom environment variables with fallback to config file
@@ -232,6 +238,99 @@ export async function loadUserQueriesCloud(userId: string): Promise<Record<strin
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
   }
+}
+
+export async function saveLiveProblemToCloud(problem: SqlProblem): Promise<boolean> {
+  if (!problem?.id) return false;
+  const safeId = problem.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const ref = doc(db, 'live_problems', safeId);
+  const path = `live_problems/${safeId}`;
+  try {
+    const payload = {
+      ...problem,
+      id: safeId,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(ref, payload, { merge: true });
+    return true;
+  } catch (error) {
+    console.warn('Could not save live problem to Firestore:', error);
+    return false;
+  }
+}
+
+export async function loadLiveProblemsCloud(): Promise<SqlProblem[]> {
+  const colRef = collection(db, 'live_problems');
+  try {
+    const q = query(colRef, orderBy('ingestedAt', 'desc'), limit(100));
+    const snap = await getDocs(q);
+    const problems: SqlProblem[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data() as SqlProblem;
+      if (d.title && d.schemas && d.expectedOutput) {
+        problems.push(d);
+      }
+    });
+    return problems;
+  } catch (error) {
+    // If query fails (e.g. index building or offline), fallback to basic getDocs
+    try {
+      const snap = await getDocs(colRef);
+      const problems: SqlProblem[] = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data() as SqlProblem;
+        if (d.title && d.schemas && d.expectedOutput) {
+          problems.push(d);
+        }
+      });
+      return problems;
+    } catch {
+      return [];
+    }
+  }
+}
+
+export function subscribeToLiveProblems(
+  onUpdate: (problems: SqlProblem[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const colRef = collection(db, 'live_problems');
+  const q = query(colRef, orderBy('ingestedAt', 'desc'), limit(100));
+
+  return onSnapshot(
+    q,
+    (snap) => {
+      const problems: SqlProblem[] = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data() as SqlProblem;
+        if (d.title && d.schemas && d.expectedOutput) {
+          problems.push(d);
+        }
+      });
+      onUpdate(problems);
+    },
+    (err) => {
+      console.warn('Live problems onSnapshot error:', err);
+      // Fallback: attempt non-ordered query if composite index not ready
+      const fallbackUnsub = onSnapshot(
+        colRef,
+        (fallbackSnap) => {
+          const problems: SqlProblem[] = [];
+          fallbackSnap.forEach((docSnap) => {
+            const d = docSnap.data() as SqlProblem;
+            if (d.title && d.schemas && d.expectedOutput) {
+              problems.push(d);
+            }
+          });
+          onUpdate(problems);
+        },
+        (fallbackErr) => {
+          if (onError) onError(fallbackErr);
+        }
+      );
+      return fallbackUnsub;
+    }
+  );
 }
 
 export {

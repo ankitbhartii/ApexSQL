@@ -5,7 +5,7 @@
 
 export type Dialect = 'postgres' | 'snowflake' | 'bigquery' | 'mysql';
 
-export type Mode = 'skill_matrix' | 'leetcode' | 'hackerrank' | 'faang_mock';
+export type Mode = 'skill_matrix' | 'leetcode' | 'hackerrank' | 'faang_mock' | 'live_stream';
 
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 
@@ -93,7 +93,7 @@ export interface SqlProblem {
   id: string;
   questionNumber: number;
   title: string;
-  platform: 'LeetCode' | 'HackerRank' | 'FAANG+ Mock' | 'Skill Matrix';
+  platform: 'LeetCode' | 'HackerRank' | 'FAANG+ Mock' | 'Skill Matrix' | 'Live Contest / Interview';
   difficulty: Difficulty;
   skillLevel: SkillLevel;
   industry: IndustryDomain;
@@ -119,6 +119,13 @@ export interface SqlProblem {
     complexity: string;
     tradeoffs: string;
   };
+  // Live Feed & Real-time Auto-Ingestion Metadata
+  sourcePlatform?: string;
+  sourceUrl?: string;
+  contestRound?: string;
+  ingestedAt?: string;
+  isLiveAutoIngested?: boolean;
+  companyTag?: string;
 }
 
 export interface TopicConfig {
@@ -128,4 +135,14 @@ export interface TopicConfig {
   count: number;
   description: string;
   icon: string;
+}
+
+export interface LivePipelineStatus {
+  isAutoSyncActive: boolean;
+  isFetchingNow: boolean;
+  lastSyncTimestamp: number;
+  totalIngestedCount: number;
+  lastIngestedProblemTitle: string | null;
+  activeSource: string;
+  statusMessage: string;
 }

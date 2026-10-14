@@ -27,6 +27,9 @@ import { useAuth } from './context/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { UserProfileMenu } from './components/UserProfileMenu';
 import alasql from 'alasql';
+import { livePipeline } from './services/liveQuestionPipeline';
+import { subscribeToLiveProblems } from './firebase';
+import type { LivePipelineStatus } from './types';
 
 // ============================================================================
 // SAFE STORAGE WRAPPER (Prevents SecurityError in sandboxed mobile WebViews)
@@ -709,10 +712,30 @@ export default function App() {
     }
   });
 
+  // Live Feed & Real-time Auto-Ingestion Pipeline State
+  const [livePipelineStatus, setLivePipelineStatus] = useState<LivePipelineStatus>(() => livePipeline.getStatus());
+  const [liveProblems, setLiveProblems] = useState<SqlProblem[]>(() => livePipeline.getProblems());
+  const [selectedLiveProblemId, setSelectedLiveProblemId] = useState<string | null>(() => {
+    return safeStorage.getItem('apex_selected_live_problem_id') || null;
+  });
+  const [livePlatformFilter, setLivePlatformFilter] = useState<string>('All');
+  const [liveToast, setLiveToast] = useState<{ id: string; title: string; source: string; time: string } | null>(null);
+  const [autoSyncCountdown, setAutoSyncCountdown] = useState<number>(60);
+
   // Generate current problem
   const problem: SqlProblem = useMemo(() => {
+    if (activeMode === 'live_stream') {
+      if (selectedLiveProblemId) {
+        const found = liveProblems.find((p) => p.id === selectedLiveProblemId);
+        if (found) return found;
+      }
+      if (liveProblems.length > 0) {
+        const idx = (questionNumber - 1) % liveProblems.length;
+        return liveProblems[idx] || liveProblems[0];
+      }
+    }
     return generateSqlProblem(activeMode, activeTopic, questionNumber, industryDomain);
-  }, [activeMode, activeTopic, questionNumber, industryDomain]);
+  }, [activeMode, activeTopic, questionNumber, industryDomain, selectedLiveProblemId, liveProblems]);
 
   // Initial sqlCode hydrated immediately from storage so it never flashes empty or disappears
   const [sqlCode, setSqlCode] = useState<string>(() => {
@@ -926,6 +949,61 @@ export default function App() {
       safeStorage.setItem('apex_last_execution_result', JSON.stringify(executionResult));
     }
   }, [executionResult]);
+
+  // Subscribe to live pipeline & Firestore real-time updates
+  useEffect(() => {
+    // 1. Subscribe to local livePipeline
+    const unsubPipeline = livePipeline.subscribe((status, problems) => {
+      setLivePipelineStatus(status);
+      setLiveProblems(problems);
+      setAutoSyncCountdown(60);
+
+      if (status.lastIngestedProblemTitle) {
+        setLiveToast({
+          id: Date.now().toString(),
+          title: status.lastIngestedProblemTitle,
+          source: status.activeSource,
+          time: 'Just now',
+        });
+      }
+    });
+
+    // 2. Subscribe to Firestore real-time onSnapshot
+    const unsubFirestore = subscribeToLiveProblems((cloudProblems) => {
+      if (cloudProblems && cloudProblems.length > 0) {
+        setLiveProblems((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const newItems = cloudProblems.filter((cp) => !existingIds.has(cp.id));
+          if (newItems.length > 0) {
+            return [...newItems, ...prev];
+          }
+          return prev;
+        });
+      }
+    });
+
+    return () => {
+      unsubPipeline();
+      unsubFirestore();
+    };
+  }, []);
+
+  // 60-second auto-sync countdown ticker
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setAutoSyncCountdown((prev) => {
+        if (!livePipelineStatus.isAutoSyncActive) return 60;
+        return prev <= 1 ? 60 : prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [livePipelineStatus.isAutoSyncActive]);
+
+  useEffect(() => {
+    if (selectedLiveProblemId) {
+      safeStorage.setItem('apex_selected_live_problem_id', selectedLiveProblemId);
+    }
+  }, [selectedLiveProblemId]);
 
   // Cloud Firestore Hydration on Authentication
   useEffect(() => {
@@ -1561,7 +1639,7 @@ export default function App() {
       </div>
 
       {/* ==================================================================== */}
-      {/* 3. FOUR CORE MODES TAB STRIP (DESKTOP) */}
+      {/* 3. FIVE CORE MODES TAB STRIP (DESKTOP) */}
       {/* ==================================================================== */}
       <nav className="hidden md:flex items-center justify-between px-6 h-10 bg-[#090d16] border-b border-slate-800/80 shrink-0 select-none">
         <div className="flex items-center gap-1.5">
@@ -1570,6 +1648,7 @@ export default function App() {
             { id: 'leetcode' as Mode, label: 'Tab 2: LeetCode Challenges', icon: '🎯' },
             { id: 'hackerrank' as Mode, label: 'Tab 3: HackerRank Multi-Table', icon: '🏆' },
             { id: 'faang_mock' as Mode, label: 'Tab 4: FAANG+ Mock Cases', icon: '💼' },
+            { id: 'live_stream' as Mode, label: 'Tab 5: 🔥 Live Contest & Interview Stream', icon: '📡', isLive: true },
           ].map((mode) => {
             const isActive = activeMode === mode.id;
             return (
@@ -1588,6 +1667,12 @@ export default function App() {
               >
                 <span>{mode.icon}</span>
                 <span>{mode.label}</span>
+                {'isLive' in mode && mode.isLive && (
+                  <span className="relative flex h-2 w-2 ml-0.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1598,7 +1683,9 @@ export default function App() {
           <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-lg text-xs">
             <span className="text-slate-400">Q #{questionNumber} of</span>
             <span className="font-semibold text-slate-200">
-              {currentTopicConfig.count.toLocaleString()}
+              {activeMode === 'live_stream'
+                ? liveProblems.length.toLocaleString()
+                : currentTopicConfig.count.toLocaleString()}
             </span>
           </div>
 
@@ -1626,7 +1713,7 @@ export default function App() {
             <input
               type="number"
               min={1}
-              max={currentTopicConfig.count}
+              max={activeMode === 'live_stream' ? liveProblems.length : currentTopicConfig.count}
               value={jumpInput}
               onChange={(e) => setJumpInput(e.target.value)}
               className="w-16 px-1.5 py-0.5 bg-slate-900 border border-slate-750 text-slate-100 rounded text-xs text-center focus:outline-none focus:border-indigo-500"
@@ -1643,71 +1730,190 @@ export default function App() {
       </nav>
 
       {/* ==================================================================== */}
-      {/* 4. TOPIC DRILL BAR & TIER FILTERS (DESKTOP) */}
+      {/* 4. TOPIC DRILL BAR OR LIVE STREAM INGESTION BAR (DESKTOP) */}
       {/* ==================================================================== */}
-      <div className="hidden md:flex flex-col px-6 py-2 bg-[#0d1322] border-b border-slate-800/60 gap-1 shrink-0 select-none">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-400 font-semibold tracking-wide uppercase text-[10px]">
-              Drill Difficulty:
-            </span>
-            {(['All', 'Beginner', 'Intermediate', 'Advanced'] as (SkillLevel | 'All')[]).map((tier) => (
+      {activeMode === 'live_stream' ? (
+        <div className="hidden md:flex flex-col px-6 py-2.5 bg-gradient-to-r from-slate-950 via-[#0a0f20] to-slate-950 border-b border-indigo-900/40 gap-2 shrink-0 select-none">
+          {/* Live Ingestion Top Row: Real-time pulse & controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-xs font-bold shadow-sm">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span>{livePipelineStatus.isAutoSyncActive ? 'LIVE REAL-TIME STREAM: ACTIVE' : 'LIVE AUTO-SYNC: PAUSED'}</span>
+              </div>
+
+              <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-mono">
+                <span className="text-indigo-400">⚡</span>
+                <span>Auto-scan in <strong className="text-cyan-300">{autoSyncCountdown}s</strong></span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-300 font-bold">{liveProblems.length} Public Questions Ingested</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400">Sources: LeetCode Contests, FAANG Dumps, HackerRank</span>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
-                key={tier}
-                onClick={() => setSelectedSkillTier(tier)}
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold cursor-pointer transition ${
-                  selectedSkillTier === tier
-                    ? tier === 'Beginner'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : tier === 'Intermediate'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : tier === 'Advanced'
-                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                      : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                    : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 border border-slate-800'
+                onClick={() => {
+                  const nextState = !livePipelineStatus.isAutoSyncActive;
+                  livePipeline.setAutoSyncActive(nextState);
+                  setLivePipelineStatus(livePipeline.getStatus());
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  livePipelineStatus.isAutoSyncActive
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
-                {tier === 'Beginner' && '🟢 '}
-                {tier === 'Intermediate' && '🟡 '}
-                {tier === 'Advanced' && '🔴 '}
-                {tier}
+                {livePipelineStatus.isAutoSyncActive ? '⏸ Pause Auto-Ingest' : '▶ Resume Auto-Ingest'}
               </button>
-            ))}
+
+              <button
+                onClick={async () => {
+                  const newProb = await livePipeline.autoIngestNextQuestion();
+                  if (newProb) {
+                    setSelectedLiveProblemId(newProb.id);
+                  }
+                }}
+                disabled={livePipelineStatus.isFetchingNow}
+                className="px-3 py-1 rounded-lg bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+              >
+                {livePipelineStatus.isFetchingNow ? (
+                  <>
+                    <span className="animate-spin text-xs">⏳</span>
+                    <span>Ingesting & Synthesizing in AlaSQL...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>⚡</span>
+                    <span>Auto-Fetch New Round Now</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
-          <span className="text-[11px] text-slate-400 italic">
-            {currentTopicConfig.description}
-          </span>
-        </div>
-
-        {/* Scrollable Horizontal Pill Strip */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
-          {filteredTopicConfigs.map((topic) => {
-            const isSelected = activeTopic === topic.id;
-            return (
+          {/* Platform Filters & Live Questions Pills Strip */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider shrink-0">Filter Feed:</span>
+            {['All', 'LeetCode', 'FAANG+ Mock', 'HackerRank'].map((plat) => (
               <button
-                key={topic.id}
-                onClick={() => handleSelectTopic(topic.id)}
-                className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5 cursor-pointer ${
-                  isSelected
+                key={plat}
+                onClick={() => setLivePlatformFilter(plat)}
+                className={`px-2.5 py-0.5 rounded text-[11px] font-bold shrink-0 cursor-pointer transition ${
+                  livePlatformFilter === plat
                     ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-slate-900/80 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+                    : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border border-slate-800'
                 }`}
               >
-                <span>{topic.icon}</span>
-                <span>{topic.label}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                    isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-800 text-slate-400'
+                {plat === 'All' ? '🌐 All Live Platforms' : plat}
+              </button>
+            ))}
+
+            <div className="h-4 w-[1px] bg-slate-800 mx-1 shrink-0" />
+
+            {/* Ingested Questions Quick Switcher */}
+            {liveProblems
+              .filter((p) => livePlatformFilter === 'All' || p.platform === livePlatformFilter || p.sourcePlatform?.includes(livePlatformFilter))
+              .map((p, idx) => {
+                const isSelected = problem.id === p.id;
+                const isSolved = solvedMap[p.id]?.status === 'ACCEPTED';
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setSelectedLiveProblemId(p.id);
+                      setQuestionNumber(idx + 1);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition flex items-center gap-2 border ${
+                      isSelected
+                        ? 'bg-indigo-950/90 text-indigo-200 border-indigo-500 shadow-md ring-1 ring-indigo-500/30'
+                        : 'bg-slate-900/70 text-slate-300 hover:bg-slate-800/80 border-slate-800'
+                    }`}
+                  >
+                    {isSolved && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+                    <span className="text-[10px] font-mono px-1 rounded bg-slate-800 text-cyan-300 border border-slate-700">
+                      {p.companyTag || p.platform}
+                    </span>
+                    <span className="max-w-[200px] truncate">{p.title}</span>
+                    <span className={`text-[9px] px-1 rounded font-bold ${
+                      p.difficulty === 'Easy' ? 'text-emerald-400' : p.difficulty === 'Medium' ? 'text-amber-400' : 'text-rose-400'
+                    }`}>
+                      {p.difficulty}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      ) : (
+        <div className="hidden md:flex flex-col px-6 py-2 bg-[#0d1322] border-b border-slate-800/60 gap-1 shrink-0 select-none">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-400 font-semibold tracking-wide uppercase text-[10px]">
+                Drill Difficulty:
+              </span>
+              {(['All', 'Beginner', 'Intermediate', 'Advanced'] as (SkillLevel | 'All')[]).map((tier) => (
+                <button
+                  key={tier}
+                  onClick={() => setSelectedSkillTier(tier)}
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold cursor-pointer transition ${
+                    selectedSkillTier === tier
+                      ? tier === 'Beginner'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : tier === 'Intermediate'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : tier === 'Advanced'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                        : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                      : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 border border-slate-800'
                   }`}
                 >
-                  {topic.count >= 1000 ? `${(topic.count / 1000).toFixed(1)}k` : topic.count}
-                </span>
-              </button>
-            );
-          })}
+                  {tier === 'Beginner' && '🟢 '}
+                  {tier === 'Intermediate' && '🟡 '}
+                  {tier === 'Advanced' && '🔴 '}
+                  {tier}
+                </button>
+              ))}
+            </div>
+
+            <span className="text-[11px] text-slate-400 italic">
+              {currentTopicConfig.description}
+            </span>
+          </div>
+
+          {/* Scrollable Horizontal Pill Strip */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
+            {filteredTopicConfigs.map((topic) => {
+              const isSelected = activeTopic === topic.id;
+              return (
+                <button
+                  key={topic.id}
+                  onClick={() => handleSelectTopic(topic.id)}
+                  className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-slate-900/80 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+                  }`}
+                >
+                  <span>{topic.icon}</span>
+                  <span>{topic.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                      isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {topic.count >= 1000 ? `${(topic.count / 1000).toFixed(1)}k` : topic.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ==================================================================== */}
       {/* 5. FLOATING INSERT TOAST NOTIFICATION */}
@@ -1764,6 +1970,7 @@ export default function App() {
                     { id: 'leetcode' as Mode, label: 'LeetCode', icon: '🎯' },
                     { id: 'hackerrank' as Mode, label: 'HackerRank', icon: '🏆' },
                     { id: 'faang_mock' as Mode, label: 'FAANG Mock', icon: '💼' },
+                    { id: 'live_stream' as Mode, label: '🔥 Live Stream', icon: '📡' },
                   ].map((m) => (
                     <button
                       key={m.id}
@@ -3192,6 +3399,63 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Real-Time Automated Live Ingestion Toast Notification */}
+      <AnimatePresence>
+        {liveToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-50 max-w-sm p-4 rounded-xl bg-slate-900/95 border border-indigo-500/50 shadow-2xl backdrop-blur-md flex items-start gap-3"
+          >
+            <div className="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 flex items-center justify-center shrink-0 text-base">
+              📡
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Auto-Ingested Just Now
+                </span>
+                <button
+                  onClick={() => setLiveToast(null)}
+                  className="text-slate-500 hover:text-slate-300 text-xs font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="font-bold text-xs text-slate-100 truncate mt-0.5">
+                {liveToast.title}
+              </p>
+              <p className="text-[11px] text-slate-400 truncate">
+                Source: {liveToast.source}
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setActiveMode('live_stream');
+                    const target = liveProblems.find((p) => p.title.includes(liveToast.title));
+                    if (target) {
+                      setSelectedLiveProblemId(target.id);
+                    }
+                    setLiveToast(null);
+                  }}
+                  className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold transition cursor-pointer shadow-sm"
+                >
+                  Solve In Sandbox ▶
+                </button>
+                <button
+                  onClick={() => setLiveToast(null)}
+                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

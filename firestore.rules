@@ -41,5 +41,13 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
     }
+
+    match /live_problems/{problemId} {
+      // Public read for live interview questions & contest stream
+      allow read: if true;
+      // Allow authenticated clients or pipeline to ingest verified problems
+      allow create, update: if isSignedIn() && isValidId(problemId);
+      allow delete: if false;
+    }
   }
 }
