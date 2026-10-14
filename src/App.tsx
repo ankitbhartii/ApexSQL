@@ -30,6 +30,10 @@ import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
 import { subscribeToLiveProblems } from './firebase';
 import type { LivePipelineStatus } from './types';
+import {
+  searchGoogleGroundingSql,
+  type GoogleSearchGroundedPayload,
+} from './services/googleSearchGrounding';
 
 // ============================================================================
 // SAFE STORAGE WRAPPER (Prevents SecurityError in sandboxed mobile WebViews)
@@ -722,6 +726,12 @@ export default function App() {
   const [liveToast, setLiveToast] = useState<{ id: string; title: string; source: string; time: string } | null>(null);
   const [autoSyncCountdown, setAutoSyncCountdown] = useState<number>(60);
 
+  // Google Search Grounding Engine State
+  const [googleSearchQuery, setGoogleSearchQuery] = useState<string>('');
+  const [isGoogleSearching, setIsGoogleSearching] = useState<boolean>(false);
+  const [groundedSearchResult, setGroundedSearchResult] = useState<GoogleSearchGroundedPayload | null>(null);
+  const [isGoogleSearchPanelOpen, setIsGoogleSearchPanelOpen] = useState<boolean>(false);
+
   // Generate current problem
   const problem: SqlProblem = useMemo(() => {
     if (activeMode === 'live_stream') {
@@ -736,6 +746,30 @@ export default function App() {
     }
     return generateSqlProblem(activeMode, activeTopic, questionNumber, industryDomain);
   }, [activeMode, activeTopic, questionNumber, industryDomain, selectedLiveProblemId, liveProblems]);
+
+  const handleExecuteGoogleSearch = async (overrideQuery?: string) => {
+    const q = overrideQuery || googleSearchQuery.trim();
+    if (!q) return;
+    setIsGoogleSearching(true);
+    try {
+      const { problem: newProb, searchResult } = await searchGoogleGroundingSql(q, livePlatformFilter);
+      setGroundedSearchResult(searchResult);
+      // Prepend to live problems list
+      setLiveProblems((prev) => [newProb, ...prev.filter((p) => p.id !== newProb.id)]);
+      setSelectedLiveProblemId(newProb.id);
+      setActiveMode('live_stream');
+      setLiveToast({
+        id: Date.now().toString(),
+        title: newProb.title,
+        source: `Google Search Grounded (${searchResult.company})`,
+        time: 'Just now',
+      });
+    } catch (err) {
+      console.warn('Google Search Grounding error:', err);
+    } finally {
+      setIsGoogleSearching(false);
+    }
+  };
 
   // Initial sqlCode hydrated immediately from storage so it never flashes empty or disappears
   const [sqlCode, setSqlCode] = useState<string>(() => {
@@ -1772,6 +1806,18 @@ export default function App() {
               </button>
 
               <button
+                onClick={() => setIsGoogleSearchPanelOpen(!isGoogleSearchPanelOpen)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                  isGoogleSearchPanelOpen
+                    ? 'bg-blue-600 text-white border-blue-400 shadow-md'
+                    : 'bg-blue-950/80 hover:bg-blue-900/80 text-blue-200 border-blue-500/40'
+                }`}
+              >
+                <span>🔍</span>
+                <span>Google Search Grounding</span>
+              </button>
+
+              <button
                 onClick={async () => {
                   const newProb = await livePipeline.autoIngestNextQuestion();
                   if (newProb) {
@@ -1795,6 +1841,128 @@ export default function App() {
               </button>
             </div>
           </div>
+
+          {/* Interactive Google Search Grounding Panel */}
+          {isGoogleSearchPanelOpen && (
+            <div className="bg-[#0b1224] p-3 rounded-xl border border-blue-500/40 flex flex-col gap-2.5 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🌐</span>
+                  <div>
+                    <span className="font-extrabold text-xs text-white flex items-center gap-2">
+                      Google Search Grounding Engine
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        gemini-3.8-flash + googleSearch
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">
+                      Search up-to-date, authentic industry SQL rounds and contest challenges across LeetCode, HackerRank, Google, Meta & Amazon.
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsGoogleSearchPanelOpen(false)}
+                  className="text-slate-400 hover:text-slate-200 text-xs font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-800 cursor-pointer"
+                >
+                  ✕ Close
+                </button>
+              </div>
+
+              {/* Search Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleExecuteGoogleSearch();
+                }}
+                className="flex items-center gap-2"
+              >
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-2.5 text-xs text-slate-500">🔍</span>
+                  <input
+                    type="text"
+                    value={googleSearchQuery}
+                    onChange={(e) => setGoogleSearchQuery(e.target.value)}
+                    placeholder="Search recent SQL interview questions, LeetCode contest updates, or FAANG rounds..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isGoogleSearching}
+                  className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition shrink-0"
+                >
+                  {isGoogleSearching ? (
+                    <>
+                      <span className="animate-spin text-xs">⏳</span>
+                      <span>Searching Google...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🔎</span>
+                      <span>Search with Google</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Quick Search Grounding Suggestion Chips */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Grounding Topics:</span>
+                {[
+                  { label: '🏆 LeetCode Contest 419 Gaps', q: 'LeetCode Weekly Contest 419 database session gap sql' },
+                  { label: '🌐 Google BigQuery Slot Skew', q: 'Google Cloud data engineering BigQuery slot skew partition pruning' },
+                  { label: '📱 Meta Threads Retention Funnel', q: 'Meta Instagram Threads data science onboarding funnel sql' },
+                  { label: '💳 Stripe High-Velocity Carding', q: 'Stripe radar sliding window fraud velocity sql round' },
+                  { label: '⚡ HackerRank Symmetric Pairs', q: 'HackerRank advanced sql championship symmetric pairs' },
+                ].map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setGoogleSearchQuery(chip.q);
+                      handleExecuteGoogleSearch(chip.q);
+                    }}
+                    className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-900 hover:bg-blue-900/40 text-slate-300 hover:text-blue-200 border border-slate-800 transition cursor-pointer"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Latest Search Result Citations Card if present */}
+              {groundedSearchResult && (
+                <div className="p-2.5 rounded-lg bg-slate-950/90 border border-blue-500/30 flex flex-col gap-1.5 mt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span className="text-emerald-400">✓</span>
+                      Grounded Result: {groundedSearchResult.title}
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      {groundedSearchResult.company} • {groundedSearchResult.difficulty}
+                    </span>
+                  </div>
+
+                  {groundedSearchResult.groundingCitations && groundedSearchResult.groundingCitations.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-400">
+                      <span className="font-semibold text-slate-300 text-[10px]">Google Search Citations:</span>
+                      {groundedSearchResult.groundingCitations.map((cit, cIdx) => (
+                        <a
+                          key={cIdx}
+                          href={cit.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-cyan-300 hover:text-cyan-200 underline truncate max-w-[240px]"
+                        >
+                          {cit.title}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Platform Filters & Live Questions Pills Strip */}
           <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
@@ -2117,6 +2285,48 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Google Search Grounding Reference & Citations */}
+            {problem.groundingCitations && problem.groundingCitations.length > 0 && (
+              <div className="bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900 rounded-xl p-3 border border-blue-500/30 text-xs flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-300 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                    Google Search Engine Grounded (gemini-3.8-flash)
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Live Verified
+                  </span>
+                </div>
+                {problem.webSearchQueries && problem.webSearchQueries.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-400 font-semibold">Search queries:</span>
+                    {problem.webSearchQueries.map((q, idx) => (
+                      <span key={idx} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-blue-200">
+                        {q}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">Live Sources:</span>
+                  <div className="flex flex-col gap-1">
+                    {problem.groundingCitations.map((c, idx) => (
+                      <a
+                        key={idx}
+                        href={c.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-cyan-300 hover:text-cyan-200 flex items-center gap-1.5 hover:underline"
+                      >
+                        <span>🔗</span>
+                        <span className="font-medium truncate">{c.title}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Business Context & Scenario */}
             <div className="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 text-xs leading-relaxed text-slate-300">
