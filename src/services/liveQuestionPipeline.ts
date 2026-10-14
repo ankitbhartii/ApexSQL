@@ -924,6 +924,35 @@ export class LiveQuestionPipeline {
   }
 
   /**
+   * Ingests externally fetched problems (e.g. from LeetCode, HackerRank, StrataScratch APIs)
+   */
+  public ingestExternalProblems(incoming: SqlProblem[], sourceName = 'Online Platforms'): number {
+    const existingIds = new Set(this.problemsCache.map((p) => p.id));
+    let addedCount = 0;
+    incoming.forEach((item) => {
+      if (!existingIds.has(item.id)) {
+        this.problemsCache.unshift(item);
+        existingIds.add(item.id);
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      this.persistLocalCache();
+      this.notifyListeners(
+        `Ingested ${addedCount} live questions from ${sourceName}`,
+        incoming[0]?.title || null,
+        sourceName
+      );
+      incoming.forEach((p) => {
+        saveLiveProblemToCloud(p).catch(() => {});
+      });
+    }
+
+    return addedCount;
+  }
+
+  /**
    * Synthesizes and deterministically verifies a problem template with AlaSQL
    */
   public synthesizeProblemFromTemplate(

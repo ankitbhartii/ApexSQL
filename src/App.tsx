@@ -25,6 +25,7 @@ import {
 } from './problemGenerator';
 import { useAuth } from './context/AuthContext';
 import { AuthModal } from './components/AuthModal';
+import { PlatformFetchModal } from './components/PlatformFetchModal';
 import { UserProfileMenu } from './components/UserProfileMenu';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
@@ -771,6 +772,7 @@ export default function App() {
   const [isGoogleSearching, setIsGoogleSearching] = useState<boolean>(false);
   const [groundedSearchResult, setGroundedSearchResult] = useState<GoogleSearchGroundedPayload | null>(null);
   const [isGoogleSearchPanelOpen, setIsGoogleSearchPanelOpen] = useState<boolean>(false);
+  const [isPlatformModalOpen, setIsPlatformModalOpen] = useState<boolean>(false);
   const [submissionVerdict, setSubmissionVerdict] = useState<SubmissionVerdict | null>(null);
 
   // Generate current problem
@@ -1673,6 +1675,15 @@ export default function App() {
             <span>Live Contest Stream</span>
           </button>
 
+          <button
+            onClick={() => setIsPlatformModalOpen(true)}
+            className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Fetch live questions from LeetCode, HackerRank, StrataScratch & FAANG"
+          >
+            <span>🌐</span>
+            <span className="hidden xl:inline">Fetch Platforms</span>
+          </button>
+
           <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-lg">
             ✓ {Object.keys(solvedMap).length} Solved
           </span>
@@ -1844,6 +1855,15 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsPlatformModalOpen(true)}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+              title="Fetch live questions from LeetCode, HackerRank, StrataScratch & FAANG"
+            >
+              <span>🌐</span>
+              <span>Fetch Online Platforms</span>
+            </button>
+
             <button
               onClick={() => setIsGoogleSearchPanelOpen(true)}
               className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 cursor-pointer shadow-xs transition"
@@ -3712,6 +3732,21 @@ export default function App() {
 
       {/* Interactive Animated Auth Modal */}
       <AuthModal />
+
+      {/* Multi-Platform Live Question Ingestion Modal */}
+      <PlatformFetchModal
+        isOpen={isPlatformModalOpen}
+        onClose={() => setIsPlatformModalOpen(false)}
+        onSelectProblem={(prob) => {
+          setActiveMode('live_stream');
+          setSelectedLiveProblemId(prob.id);
+          setQuestionNumber(1);
+        }}
+        onToast={(msg) => {
+          setInsertToast(msg);
+          setTimeout(() => setInsertToast(null), 3500);
+        }}
+      />
     </div>
   );
 }
