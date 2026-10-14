@@ -1172,21 +1172,28 @@ export default function App() {
     setTimeout(() => setInsertToast(null), 3000);
   };
 
+  const TOTAL_QUESTIONS_COUNT = 27500;
+  const totalQuestionsCount = activeMode === 'live_stream' ? (liveProblems.length || 1) : TOTAL_QUESTIONS_COUNT;
+
   // Countdown timer interval & persistence
   useEffect(() => {
-    let interval: any = null;
+    let interval: NodeJS.Timeout | null = null;
     if (isTimerRunning && timerSecondsLeft > 0) {
       interval = setInterval(() => {
-        setTimerSecondsLeft((prev) => {
-          const next = prev <= 1 ? 0 : prev - 1;
-          safeStorage.setItem('apex_timer_seconds_left', String(next));
-          if (next === 0) setIsTimerRunning(false);
-          return next;
-        });
+        setTimerSecondsLeft((prev) => (prev <= 1 ? 0 : prev - 1));
       }, 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isTimerRunning, timerSecondsLeft]);
+
+  useEffect(() => {
+    safeStorage.setItem('apex_timer_seconds_left', String(timerSecondsLeft));
+    if (timerSecondsLeft === 0 && isTimerRunning) {
+      setIsTimerRunning(false);
+    }
+  }, [timerSecondsLeft, isTimerRunning]);
 
   // Format timer MM:SS
   const formattedTimer = useMemo(() => {
@@ -1206,67 +1213,53 @@ export default function App() {
     safeStorage.setItem('apex_timer_seconds_left', String(totalSecs));
   };
 
-  // Mastery handlers
+  // Mastery handlers (pure state updates with side-effects executed cleanly outside updaters)
   const toggleMastered = (id: string) => {
-    setMasteredList((prev) => {
-      const updated = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
-      safeStorage.setItem('apex_mastered_problems', JSON.stringify(updated));
-      if (currentUser) {
-        syncProgressToCloud({
-          solvedProblems: Object.keys(solvedMap),
-          masteredProblems: updated,
-          reviewProblems: reviewList,
-          notesMap
-        });
-      }
-      return updated;
-    });
+    const updated = masteredList.includes(id) ? masteredList.filter((item) => item !== id) : [...masteredList, id];
+    setMasteredList(updated);
+    safeStorage.setItem('apex_mastered_problems', JSON.stringify(updated));
+    if (currentUser) {
+      syncProgressToCloud({
+        solvedProblems: Object.keys(solvedMap),
+        masteredProblems: updated,
+        reviewProblems: reviewList,
+        notesMap
+      });
+    }
   };
 
   const toggleReview = (id: string) => {
-    setReviewList((prev) => {
-      const updated = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
-      safeStorage.setItem('apex_review_problems', JSON.stringify(updated));
-      if (currentUser) {
-        syncProgressToCloud({
-          solvedProblems: Object.keys(solvedMap),
-          masteredProblems: masteredList,
-          reviewProblems: updated,
-          notesMap
-        });
-      }
-      return updated;
-    });
+    const updated = reviewList.includes(id) ? reviewList.filter((item) => item !== id) : [...reviewList, id];
+    setReviewList(updated);
+    safeStorage.setItem('apex_review_problems', JSON.stringify(updated));
+    if (currentUser) {
+      syncProgressToCloud({
+        solvedProblems: Object.keys(solvedMap),
+        masteredProblems: masteredList,
+        reviewProblems: updated,
+        notesMap
+      });
+    }
   };
 
-  // Steppers & Navigation
+  // Steppers & Navigation across full 27,500 curriculum questions
   const handleNextQuestion = () => {
-    setQuestionNumber((prev) => {
-      const nextVal = prev >= currentTopicConfig.count ? 1 : prev + 1;
-      setJumpInput(String(nextVal));
-      return nextVal;
-    });
+    setQuestionNumber((prev) => (prev >= totalQuestionsCount ? 1 : prev + 1));
   };
 
   const handlePrevQuestion = () => {
-    setQuestionNumber((prev) => {
-      const prevVal = prev <= 1 ? currentTopicConfig.count : prev - 1;
-      setJumpInput(String(prevVal));
-      return prevVal;
-    });
+    setQuestionNumber((prev) => (prev <= 1 ? totalQuestionsCount : prev - 1));
   };
 
   const handleShuffle = () => {
-    const maxBound = Math.min(currentTopicConfig.count, 2000);
-    const randomQ = Math.floor(Math.random() * maxBound) + 1;
+    const randomQ = Math.floor(Math.random() * totalQuestionsCount) + 1;
     setQuestionNumber(randomQ);
-    setJumpInput(String(randomQ));
   };
 
   const handleJumpSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const parsed = parseInt(jumpInput, 10);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= currentTopicConfig.count) {
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= totalQuestionsCount) {
       setQuestionNumber(parsed);
     } else {
       setJumpInput(String(questionNumber));
@@ -1298,21 +1291,19 @@ export default function App() {
   // Candidate personal notes change with safe auto-save and cloud sync
   const handleNoteChange = useCallback(
     (newNote: string) => {
-      setNotesMap((prev) => {
-        const updated = { ...prev, [problem.id]: newNote };
-        safeStorage.setItem('apex_problem_notes', JSON.stringify(updated));
-        if (currentUser) {
-          syncProgressToCloud({
-            solvedProblems: Object.keys(solvedMap),
-            masteredProblems: masteredList,
-            reviewProblems: reviewList,
-            notesMap: updated,
-          });
-        }
-        return updated;
-      });
+      const updated = { ...notesMap, [problem.id]: newNote };
+      setNotesMap(updated);
+      safeStorage.setItem('apex_problem_notes', JSON.stringify(updated));
+      if (currentUser) {
+        syncProgressToCloud({
+          solvedProblems: Object.keys(solvedMap),
+          masteredProblems: masteredList,
+          reviewProblems: reviewList,
+          notesMap: updated,
+        });
+      }
     },
-    [problem.id, currentUser, solvedMap, masteredList, reviewList, syncProgressToCloud]
+    [problem.id, currentUser, solvedMap, masteredList, reviewList, notesMap, syncProgressToCloud]
   );
 
   // Synchronized scroll between textarea and line numbers
@@ -1371,23 +1362,21 @@ export default function App() {
           timestamp: Date.now(),
         });
 
-        setSolvedMap((prev) => {
-          const updated = {
-            ...prev,
-            [problem.id]: { status: 'ACCEPTED', timestamp: Date.now() },
-          };
-          safeStorage.setItem('apex_solved_problems', JSON.stringify(updated));
-          if (currentUser) {
-            syncProgressToCloud({
-              solvedProblems: Object.keys(updated),
-              masteredProblems: masteredList,
-              reviewProblems: reviewList,
-              notesMap,
-            });
-            syncQueryToCloud(problem.id, sqlCode, dialect, true);
-          }
-          return updated;
-        });
+        const updatedSolved = {
+          ...solvedMap,
+          [problem.id]: { status: 'ACCEPTED', timestamp: Date.now() },
+        };
+        setSolvedMap(updatedSolved);
+        safeStorage.setItem('apex_solved_problems', JSON.stringify(updatedSolved));
+        if (currentUser) {
+          syncProgressToCloud({
+            solvedProblems: Object.keys(updatedSolved),
+            masteredProblems: masteredList,
+            reviewProblems: reviewList,
+            notesMap,
+          });
+          syncQueryToCloud(problem.id, sqlCode, dialect, true);
+        }
       } else {
         const details =
           result.diffReport?.missingColumns?.length
@@ -1406,26 +1395,25 @@ export default function App() {
           timestamp: Date.now(),
         });
 
-        setSolvedMap((prev) => {
-          if (!prev[problem.id]) return prev;
-          const updated = { ...prev };
-          delete updated[problem.id];
-          safeStorage.setItem('apex_solved_problems', JSON.stringify(updated));
+        if (solvedMap[problem.id]) {
+          const updatedSolved = { ...solvedMap };
+          delete updatedSolved[problem.id];
+          setSolvedMap(updatedSolved);
+          safeStorage.setItem('apex_solved_problems', JSON.stringify(updatedSolved));
           if (currentUser) {
             syncProgressToCloud({
-              solvedProblems: Object.keys(updated),
+              solvedProblems: Object.keys(updatedSolved),
               masteredProblems: masteredList,
               reviewProblems: reviewList,
               notesMap,
             });
             syncQueryToCloud(problem.id, sqlCode, dialect, false);
           }
-          return updated;
-        });
+        }
       }
       setIsExecuting(false);
     }, 240);
-  }, [sqlCode, problem, currentUser, syncProgressToCloud, syncQueryToCloud, masteredList, reviewList, notesMap, dialect]);
+  }, [sqlCode, problem, currentUser, syncProgressToCloud, syncQueryToCloud, masteredList, reviewList, notesMap, dialect, solvedMap]);
 
   const handleRunQuery = () => executeQuery(false);
   const handleSubmitQuery = () => executeQuery(true);
@@ -1624,8 +1612,8 @@ export default function App() {
             ◀
           </button>
           <span className="text-xs font-mono font-bold text-slate-200 px-1">
-            Q #{questionNumber}
-            <span className="text-slate-500 font-normal"> / {activeMode === 'live_stream' ? liveProblems.length : currentTopicConfig.count}</span>
+            Q #{questionNumber.toLocaleString()}
+            <span className="text-slate-500 font-normal"> / {totalQuestionsCount.toLocaleString()}</span>
           </span>
           <button
             onClick={handleNextQuestion}
@@ -2120,7 +2108,7 @@ export default function App() {
                 <input
                   type="number"
                   min={1}
-                  max={currentTopicConfig.count}
+                  max={totalQuestionsCount}
                   value={jumpInput}
                   onChange={(e) => setJumpInput(e.target.value)}
                   className="w-24 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-center"
