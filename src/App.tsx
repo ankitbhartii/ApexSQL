@@ -32,6 +32,7 @@ import { SqlCodeEditor } from './components/SqlCodeEditor';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
 import { subscribeToLiveProblems } from './firebase';
+import { AUTHENTIC_PLATFORM_PROBLEMS } from './services/platformQuestionsData';
 import type { LivePipelineStatus } from './types';
 import {
   searchGoogleGroundingSql,
@@ -834,17 +835,22 @@ export default function App() {
 
   // Generate current problem
   const problem: SqlProblem = useMemo(() => {
+    let resolved: SqlProblem | undefined;
     if (activeMode === 'live_stream') {
       if (selectedLiveProblemId) {
-        const found = liveProblems.find((p) => p.id === selectedLiveProblemId);
-        if (found) return found;
+        resolved = liveProblems.find((p) => p.id === selectedLiveProblemId);
       }
-      if (liveProblems.length > 0) {
+      if (!resolved && liveProblems.length > 0) {
         const idx = (questionNumber - 1) % liveProblems.length;
-        return liveProblems[idx] || liveProblems[0];
+        resolved = liveProblems[idx] || liveProblems[0];
       }
     }
-    return generateSqlProblem(activeMode, activeTopic, questionNumber, industryDomain);
+    if (!resolved) {
+      resolved = generateSqlProblem(activeMode, activeTopic, questionNumber, industryDomain);
+    }
+    // Always upgrade to authentic problem from official platform database if available
+    const authentic = AUTHENTIC_PLATFORM_PROBLEMS.find((p) => p.id === resolved?.id);
+    return authentic || resolved;
   }, [activeMode, activeTopic, questionNumber, industryDomain, selectedLiveProblemId, liveProblems]);
 
   const handleExecuteGoogleSearch = async (overrideQuery?: string) => {
@@ -2358,7 +2364,7 @@ export default function App() {
 
               <div className="flex items-start justify-between gap-2">
                 <h1 className="text-lg lg:text-xl font-extrabold text-white tracking-tight">
-                  {problem.title}
+                  {problem.title.replace(/^(HackerRank:\s*|LeetCode:\s*)/i, '')}
                 </h1>
 
                 {/* Bookmark / Review toggles */}
@@ -2431,27 +2437,144 @@ export default function App() {
               </div>
             )}
 
-            {/* Business Context & Scenario */}
-            <div className="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 text-xs leading-relaxed text-slate-300">
-              <span className="font-bold text-slate-200 block mb-1 uppercase tracking-wider text-[10px]">
-                Business Context & Problem Statement:
-              </span>
-              <p>{problem.businessScenario}</p>
-            </div>
+            {/* Authentic Problem Statement & Description (HackerRank / LeetCode Format) */}
+            <div className="flex flex-col gap-4 text-sm text-slate-200 leading-relaxed">
+              {/* Problem Statement Prose */}
+              <div className="space-y-3">
+                {problem.businessScenario
+                  .split('\n\n')
+                  .filter(Boolean)
+                  .map((paragraph, pIdx) => {
+                    const isTableIntro = paragraph.toLowerCase().includes('is described as follows:');
 
-            {/* Explicit Requirements Checklist */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider text-[11px]">
-                Explicit Requirements:
-              </span>
-              <ul className="flex flex-col gap-1 text-xs text-slate-300">
-                {problem.requirements.map((req, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="text-indigo-400 font-bold shrink-0">•</span>
-                    <span>{req}</span>
-                  </li>
-                ))}
-              </ul>
+                    return (
+                      <p
+                        key={pIdx}
+                        className={`${
+                          isTableIntro
+                            ? 'font-semibold text-slate-100 pt-1'
+                            : 'text-slate-200'
+                        } leading-relaxed`}
+                      >
+                        {paragraph.split(/(`[^`]+`|\b[A-Z0-9_]{2,}\b)/g).map((chunk, cIdx) => {
+                          const trimmed = chunk.replace(/`/g, '');
+                          const isKnownTableOrCol = problem.schemas?.some(
+                            (s) =>
+                              s.tableName.toUpperCase() === trimmed.toUpperCase() ||
+                              s.columns.some((col) => col.name.toUpperCase() === trimmed.toUpperCase())
+                          );
+                          const isConstant = ['USA', 'JPN', 'NLD'].includes(trimmed);
+
+                          if (chunk.startsWith('`') && chunk.endsWith('`')) {
+                            return (
+                              <code
+                                key={cIdx}
+                                className="font-mono bg-slate-800/90 text-cyan-300 px-1.5 py-0.5 rounded text-xs border border-slate-700 font-semibold"
+                              >
+                                {trimmed}
+                              </code>
+                            );
+                          }
+
+                          if (isKnownTableOrCol || isConstant) {
+                            return (
+                              <span
+                                key={cIdx}
+                                className="font-mono bg-slate-800/80 text-cyan-300 px-1.5 py-0.5 rounded text-xs border border-slate-700/60 font-semibold"
+                              >
+                                {trimmed}
+                              </span>
+                            );
+                          }
+
+                          return <span key={cIdx}>{chunk}</span>;
+                        })}
+                      </p>
+                    );
+                  })}
+              </div>
+
+              {/* Authentic HackerRank / LeetCode Table Schemas */}
+              {problem.schemas && problem.schemas.length > 0 && (
+                <div className="flex flex-col gap-3 pt-1">
+                  {problem.schemas.map((schema) => (
+                    <div
+                      key={schema.tableName}
+                      className="rounded-xl border border-slate-800 bg-[#0c1322] overflow-hidden shadow-sm"
+                    >
+                      <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                          <span>📋</span>
+                          <span>{schema.tableName}</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {schema.columns.length} columns
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 text-[10px] text-slate-400 uppercase tracking-wider bg-slate-900/50">
+                              <th className="py-1.5 px-3.5 font-semibold">Field</th>
+                              <th className="py-1.5 px-3.5 font-semibold">Type</th>
+                              <th className="py-1.5 px-3.5 font-semibold">Description</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60">
+                            {schema.columns.map((col) => (
+                              <tr key={col.name} className="hover:bg-slate-800/40 transition-colors">
+                                <td className="py-1.5 px-3.5 font-mono text-cyan-300 font-bold text-xs">
+                                  {col.name}
+                                </td>
+                                <td className="py-1.5 px-3.5 font-mono text-amber-300/90 text-[11px]">
+                                  {col.type}
+                                </td>
+                                <td className="py-1.5 px-3.5 text-slate-400 text-xs">
+                                  {col.description || (col.isPk ? 'Primary Key' : '—')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Meaningful Specific Requirements / Constraints */}
+              {(() => {
+                const meaningful = (problem.requirements || []).filter((r) => {
+                  const l = r.toLowerCase();
+                  return (
+                    !l.includes('query required columns') &&
+                    !l.includes('handle relational filters') &&
+                    !l.includes('follow exact hackerrank') &&
+                    !l.includes('execute query against') &&
+                    !l.includes('satisfy primary and edge-case') &&
+                    !l.includes('project exact column aliases')
+                  );
+                });
+
+                if (meaningful.length === 0) return null;
+
+                return (
+                  <div className="flex flex-col gap-2 p-3 bg-slate-900/60 rounded-xl border border-slate-800/80">
+                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <span className="text-indigo-400">⚡</span>
+                      Constraints & Specific Rules:
+                    </span>
+                    <ul className="flex flex-col gap-1.5 text-xs text-slate-300">
+                      {meaningful.map((req, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                          <span>{req}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Tabbed Data Explorer: Tab A (Schema & Sample) vs Tab B (Expected Output) */}

@@ -6,6 +6,7 @@
 import alasql from 'alasql';
 import { Dialect, SqlProblem, TableSchema, LivePipelineStatus } from '../types';
 import { saveLiveProblemToCloud, loadLiveProblemsCloud } from '../firebase';
+import { AUTHENTIC_HACKERRANK_PROBLEMS } from './hackerrankQuestionsData';
 
 // ============================================================================
 // PUBLIC CONTEST & INTERVIEW PLATFORM REPOSITORY
@@ -889,7 +890,22 @@ export class LiveQuestionPipeline {
       this.persistLocalCache();
     }
 
-    // 3. Sync from Firestore in background
+    // 3. Always upgrade cached HackerRank questions with authentic schemas & descriptions
+    try {
+      AUTHENTIC_HACKERRANK_PROBLEMS.forEach((authProb) => {
+        const idx = this.problemsCache.findIndex((p) => p.id === authProb.id);
+        if (idx >= 0) {
+          this.problemsCache[idx] = authProb;
+        } else {
+          this.problemsCache.push(authProb);
+        }
+      });
+      this.persistLocalCache();
+    } catch {
+      // safe
+    }
+
+    // 4. Sync from Firestore in background
     loadLiveProblemsCloud().then((cloudProblems) => {
       if (cloudProblems && cloudProblems.length > 0) {
         this.mergeProblems(cloudProblems);
@@ -927,17 +943,18 @@ export class LiveQuestionPipeline {
    * Ingests externally fetched problems (e.g. from LeetCode, HackerRank, StrataScratch APIs)
    */
   public ingestExternalProblems(incoming: SqlProblem[], sourceName = 'Online Platforms'): number {
-    const existingIds = new Set(this.problemsCache.map((p) => p.id));
     let addedCount = 0;
     incoming.forEach((item) => {
-      if (!existingIds.has(item.id)) {
+      const idx = this.problemsCache.findIndex((p) => p.id === item.id);
+      if (idx >= 0) {
+        this.problemsCache[idx] = item;
+      } else {
         this.problemsCache.unshift(item);
-        existingIds.add(item.id);
         addedCount++;
       }
     });
 
-    if (addedCount > 0) {
+    if (addedCount > 0 || incoming.length > 0) {
       this.persistLocalCache();
       this.notifyListeners(
         `Ingested ${addedCount} live questions from ${sourceName}`,

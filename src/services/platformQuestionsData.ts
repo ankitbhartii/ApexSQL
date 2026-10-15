@@ -216,8 +216,12 @@ export const SCHEMA_SUBMISSIONS: TableSchema = {
   ],
 };
 
-// 58 Complete HackerRank Domain Challenges
-export const ALL_HACKERRANK_PROBLEMS: SqlProblem[] = [
+// 58 Authentic HackerRank SQL Domain Challenges
+import { AUTHENTIC_HACKERRANK_PROBLEMS } from './hackerrankQuestionsData';
+export const ALL_HACKERRANK_PROBLEMS: SqlProblem[] = AUTHENTIC_HACKERRANK_PROBLEMS;
+export { AUTHENTIC_HACKERRANK_PROBLEMS };
+
+const DEPRECATED_HACKERRANK_PROBLEMS: SqlProblem[] = [
   {
     id: 'hr_revising_the_select_query',
     questionNumber: 1,
