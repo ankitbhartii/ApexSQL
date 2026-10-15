@@ -924,6 +924,10 @@ export default function App() {
   }, []);
 
   const handleSelectDirectoryProblem = useCallback((prob: SqlProblem) => {
+    setSubmissionVerdict(null);
+    setExecutionResult(null);
+    safeStorage.removeItem('apex_last_execution_result');
+    safeStorage.removeItem('apex_last_execution_problem_id');
     livePipeline.ingestExternalProblems([prob], prob.platform);
     setLiveProblems(livePipeline.getProblems());
     setSelectedLiveProblemId(prob.id);
@@ -998,11 +1002,15 @@ export default function App() {
     return problem.starterCodeByDialect[dialect] || '';
   });
 
-  // Persisted execution result so it never disappears on refresh
+  // Persisted execution result so it never disappears on refresh (scoped strictly to current problem)
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(() => {
     try {
+      const savedProblemId = safeStorage.getItem('apex_last_execution_problem_id');
       const saved = safeStorage.getItem('apex_last_execution_result');
-      return saved ? JSON.parse(saved) : null;
+      if (saved && savedProblemId === problem.id) {
+        return JSON.parse(saved);
+      }
+      return null;
     } catch {
       return null;
     }
@@ -1113,6 +1121,18 @@ export default function App() {
       setSqlCode(problem.starterCodeByDialect[dialect] || '');
     }
   }, [problem.id, dialect]);
+
+  // Real-time reset of execution output and submission verdict when switching questions
+  const prevProblemIdRef = useRef<string>(problem.id);
+  useEffect(() => {
+    if (prevProblemIdRef.current !== problem.id) {
+      prevProblemIdRef.current = problem.id;
+      setSubmissionVerdict(null);
+      setExecutionResult(null);
+      safeStorage.removeItem('apex_last_execution_result');
+      safeStorage.removeItem('apex_last_execution_problem_id');
+    }
+  }, [problem.id]);
 
   // Persist live draft code so refreshing never loses typed content
   useEffect(() => {
@@ -1409,15 +1429,25 @@ export default function App() {
   };
 
   // Steppers & Navigation across full 27,500 curriculum questions
+  const clearExecutionState = () => {
+    setSubmissionVerdict(null);
+    setExecutionResult(null);
+    safeStorage.removeItem('apex_last_execution_result');
+    safeStorage.removeItem('apex_last_execution_problem_id');
+  };
+
   const handleNextQuestion = () => {
+    clearExecutionState();
     setQuestionNumber((prev) => (prev >= totalQuestionsCount ? 1 : prev + 1));
   };
 
   const handlePrevQuestion = () => {
+    clearExecutionState();
     setQuestionNumber((prev) => (prev <= 1 ? totalQuestionsCount : prev - 1));
   };
 
   const handleShuffle = () => {
+    clearExecutionState();
     const randomQ = Math.floor(Math.random() * totalQuestionsCount) + 1;
     setQuestionNumber(randomQ);
   };
@@ -1426,6 +1456,7 @@ export default function App() {
     if (e) e.preventDefault();
     const parsed = parseInt(jumpInput, 10);
     if (!isNaN(parsed) && parsed >= 1 && parsed <= totalQuestionsCount) {
+      clearExecutionState();
       setQuestionNumber(parsed);
     } else {
       setJumpInput(String(questionNumber));
@@ -1433,6 +1464,7 @@ export default function App() {
   };
 
   const handleSelectTopic = (topicId: TopicCategory) => {
+    clearExecutionState();
     setActiveTopic(topicId);
     setQuestionNumber(1);
     setJumpInput('1');
@@ -1510,6 +1542,7 @@ export default function App() {
       const result = evaluateSqlQuery(sqlCode, problem);
       setExecutionResult(result);
       safeStorage.setItem('apex_last_execution_result', JSON.stringify(result));
+      safeStorage.setItem('apex_last_execution_problem_id', problem.id);
       setConsoleTab('result');
 
       const isAccepted = result.status === 'ACCEPTED' || (result.diffReport?.isFullMatch === true);
