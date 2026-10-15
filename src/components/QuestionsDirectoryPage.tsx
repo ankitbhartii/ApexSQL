@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { SqlProblem } from '../types';
 import {
   AUTHENTIC_PLATFORM_PROBLEMS,
@@ -195,7 +196,9 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 flex flex-col space-y-5">
         {/* Platform Selection Tabs */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-          <button
+          <motion.button
+            whileHover={{ y: -2, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('all')}
             className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'all'
@@ -213,9 +216,11 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
               <div className="text-xs font-bold text-white">All Platforms</div>
               <div className="text-[10px] text-slate-400">Master Aggregated Catalog</div>
             </div>
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileHover={{ y: -2, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('datadriven')}
             className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'datadriven'
@@ -233,9 +238,11 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
               <div className="text-xs font-bold text-white">DataDriven.io</div>
               <div className="text-[10px] text-slate-400">Data Engineering (2026)</div>
             </div>
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileHover={{ y: -2, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('leetcode')}
             className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'leetcode'
@@ -253,9 +260,11 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
               <div className="text-xs font-bold text-white">LeetCode</div>
               <div className="text-[10px] text-slate-400">Database Complete 323</div>
             </div>
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileHover={{ y: -2, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('hackerrank')}
             className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'hackerrank'
@@ -273,9 +282,11 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
               <div className="text-xs font-bold text-white">HackerRank</div>
               <div className="text-[10px] text-slate-400">SQL Domain Track</div>
             </div>
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileHover={{ y: -2, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('stratascratch')}
             className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'stratascratch'
@@ -293,7 +304,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
               <div className="text-xs font-bold text-white">StrataScratch & FAANG</div>
               <div className="text-[10px] text-slate-400">Production Business Cases</div>
             </div>
-          </button>
+          </motion.button>
         </div>
 
         {/* Filter & Search Bar */}
@@ -657,13 +668,15 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
 
                         {/* 7. Action Button */}
                         <td className="px-4 py-3.5 text-center">
-                          <button
+                          <motion.button
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
                             onClick={() => onSelectProblem(q)}
-                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer mx-auto w-full group-hover:scale-102"
+                            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-cyan-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 hover:shadow-cyan-500/20 border border-indigo-400/30 transition-all cursor-pointer mx-auto w-full active:scale-95"
                           >
                             <span>⚡</span>
                             <span>Solve Challenge</span>
-                          </button>
+                          </motion.button>
                         </td>
                       </tr>
                     );

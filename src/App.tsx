@@ -1661,26 +1661,26 @@ export default function App() {
       {/* ==================================================================== */}
       {/* 1. TOP DOCKED HEADER (DESKTOP & TABLET) */}
       {/* ==================================================================== */}
-      <header className="hidden md:flex items-center justify-between px-4 lg:px-6 h-14 bg-[#0f172a] border-b border-slate-800 shrink-0 z-30 select-none">
-        {/* Left: Brand + View Switcher + Mode & Topic Selectors */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 mr-1">
+      <header className="hidden md:flex items-center justify-between px-3 lg:px-4 h-14 bg-[#0b1120]/95 backdrop-blur-md border-b border-slate-800/80 shrink-0 z-30 select-none gap-2 w-full max-w-full">
+        {/* Left: Brand + View Switcher + Challenge Mode */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 mr-0.5 shrink-0">
             <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/20">
               SQL
             </span>
-            <span className="font-extrabold text-sm tracking-tight text-white">ApexSQL</span>
+            <span className="font-extrabold text-sm tracking-tight text-white hidden sm:inline">ApexSQL</span>
           </div>
 
           {/* View Mode Navigation Tabs */}
-          <div className="inline-flex items-center p-0.5 bg-slate-900 rounded-lg border border-slate-750">
+          <div className="inline-flex items-center p-0.5 bg-slate-900/90 rounded-lg border border-slate-800 shrink-0 h-8">
             <button
               onClick={() => {
                 setCurrentView('sandbox');
                 window.location.hash = '#/sandbox';
               }}
-              className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              className={`px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
                 currentView === 'sandbox'
-                  ? 'bg-indigo-600 text-white shadow-xs'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -1692,21 +1692,21 @@ export default function App() {
                 setCurrentView('directory');
                 window.location.hash = '#/questions';
               }}
-              className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              className={`px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
                 currentView === 'directory'
-                  ? 'bg-cyan-600 text-white shadow-xs'
+                  ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/25'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <span>📚</span>
-              <span>All Questions</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono">
+              <span>Questions</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono leading-none">
                 1,309
               </span>
             </button>
           </div>
 
-          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+          <div className="h-4 w-px bg-slate-800 mx-0.5 shrink-0" />
 
           {/* Mode Dropdown */}
           <select
@@ -1716,7 +1716,7 @@ export default function App() {
               setQuestionNumber(1);
               setJumpInput('1');
             }}
-            className="bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-100 font-semibold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs"
+            className="h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-100 font-semibold text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer shadow-xs whitespace-nowrap shrink-0 max-w-[145px] lg:max-w-[170px]"
             title="Switch Challenge Mode"
           >
             <option value="skill_matrix">⚡ Skill Matrix</option>
@@ -1726,147 +1726,120 @@ export default function App() {
             <option value="live_stream">📡 Live Contest Stream</option>
           </select>
 
-          {/* Topic Dropdown */}
-          <select
-            value={activeTopic}
-            onChange={(e) => handleSelectTopic(e.target.value as TopicCategory)}
-            className="bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[170px] truncate"
-            title="Filter by SQL Topic"
-          >
-            {TOPIC_DRILL_CONFIGS.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.icon} {t.label} ({t.count.toLocaleString()})
-              </option>
-            ))}
-          </select>
-
-          {/* Difficulty Segmented Controls */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
-            {(['All', 'Beginner', 'Intermediate', 'Advanced'] as const).map((tier) => (
-              <button
-                key={tier}
-                onClick={() => setSelectedSkillTier(tier)}
-                className={`px-2 py-0.5 rounded-md font-medium text-[11px] transition cursor-pointer ${
-                  selectedSkillTier === tier
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {tier === 'All' ? 'All' : tier === 'Beginner' ? 'Easy' : tier === 'Intermediate' ? 'Med' : 'Hard'}
-              </button>
-            ))}
-          </div>
+          {/* Topic Dropdown - only when in sandbox and on 2xl+ screens to prevent navbar overcrowding */}
+          {currentView === 'sandbox' && (
+            <select
+              value={activeTopic}
+              onChange={(e) => handleSelectTopic(e.target.value as TopicCategory)}
+              className="hidden 2xl:block h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer max-w-[140px] truncate whitespace-nowrap shrink-0"
+              title="Filter by SQL Topic"
+            >
+              {TOPIC_DRILL_CONFIGS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.icon} {t.label} ({t.count.toLocaleString()})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Center: Problem Navigation & Interview Timer */}
-        <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-lg">
-          <button
-            onClick={handlePrevQuestion}
-            className="px-2 py-0.5 rounded text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 font-bold transition cursor-pointer"
-            title="Previous Problem"
-          >
-            ◀
-          </button>
-          <span className="text-xs font-mono font-bold text-slate-200 px-1">
-            Q #{questionNumber.toLocaleString()}
-            <span className="text-slate-500 font-normal"> / {totalQuestionsCount.toLocaleString()}</span>
-          </span>
-          <button
-            onClick={handleNextQuestion}
-            className="px-2 py-0.5 rounded text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 font-bold transition cursor-pointer"
-            title="Next Problem"
-          >
-            ▶
-          </button>
-          <button
-            onClick={handleShuffle}
-            className="p-1 rounded text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer"
-            title="Randomize Problem"
-          >
-            🔀
-          </button>
+        {currentView === 'sandbox' ? (
+          <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 px-2 rounded-lg h-8 shrink-0 whitespace-nowrap shadow-inner">
+            <button
+              onClick={handlePrevQuestion}
+              className="w-6 h-6 rounded flex items-center justify-center text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 font-bold transition cursor-pointer shrink-0"
+              title="Previous Problem"
+            >
+              ◀
+            </button>
+            <div className="text-xs font-mono font-bold text-slate-200 px-1 whitespace-nowrap flex items-center gap-1">
+              <span>Q #{questionNumber.toLocaleString()}</span>
+              <span className="text-slate-500 font-normal">/ {totalQuestionsCount.toLocaleString()}</span>
+            </div>
+            <button
+              onClick={handleNextQuestion}
+              className="w-6 h-6 rounded flex items-center justify-center text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 font-bold transition cursor-pointer shrink-0"
+              title="Next Problem"
+            >
+              ▶
+            </button>
+            <button
+              onClick={handleShuffle}
+              className="w-6 h-6 rounded flex items-center justify-center text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer shrink-0"
+              title="Randomize Problem"
+            >
+              🔀
+            </button>
 
-          <div className="h-3.5 w-px bg-slate-800 mx-1" />
+            <div className="h-3.5 w-px bg-slate-800 mx-1 shrink-0" />
 
-          {/* Compact 1-click Timer */}
-          <button
-            onClick={handleToggleTimer}
-            className={`px-2 py-0.5 rounded text-xs font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
-              isTimerRunning
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-            }`}
-            title={isTimerRunning ? 'Timer active - click to pause' : 'Timer paused - click to start'}
-          >
-            <span>⏱</span>
-            <span>{formattedTimer}</span>
-          </button>
-        </div>
+            {/* Compact 1-click Timer */}
+            <button
+              onClick={handleToggleTimer}
+              className={`px-2 h-6 rounded text-xs font-mono font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
+                isTimerRunning
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+              title={isTimerRunning ? 'Timer active - click to pause' : 'Timer paused - click to start'}
+            >
+              <span>⏱</span>
+              <span>{formattedTimer}</span>
+            </button>
+          </div>
+        ) : (
+          <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-slate-900/60 border border-slate-800/80 rounded-lg text-xs text-slate-400 font-mono">
+            <span>📚 Question Library</span>
+            <span className="text-slate-600">•</span>
+            <span className="text-cyan-400 font-bold">1,309 Curated Challenges</span>
+          </div>
+        )}
 
-        {/* Right: Live Search, Solved Count, Domain, Profile */}
-        <div className="flex items-center gap-2.5">
+        {/* Right: Live Search, Platforms, Solved Count, Storage, Profile / Sign In */}
+        <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
           <button
             onClick={() => setIsGoogleSearchPanelOpen(true)}
-            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-950/70 hover:bg-blue-900/80 text-blue-200 border border-blue-500/40 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-2.5 h-8 rounded-lg text-xs font-semibold bg-blue-950/60 hover:bg-blue-900/80 text-blue-200 border border-blue-500/40 transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
             title="Search real-time SQL challenges with Google Search Grounding"
           >
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
             </span>
-            <span>Live Contest Stream</span>
+            <span className="hidden xl:inline">Live Contest</span>
+            <span className="xl:hidden">Live</span>
           </button>
 
           <button
             onClick={() => setIsPlatformModalOpen(true)}
-            className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-            title="Fetch live questions from LeetCode, HackerRank, StrataScratch & FAANG"
+            className="px-2.5 h-8 rounded-lg text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
+            title="Fetch live questions from LeetCode, HackerRank, DataDriven & FAANG"
           >
             <span>🌐</span>
             <span className="hidden xl:inline">Fetch Platforms</span>
+            <span className="xl:hidden">Fetch</span>
           </button>
 
-          <button
-            onClick={() => {
-              setCurrentView('directory');
-              window.location.hash = '#/questions';
-            }}
-            className="px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-600/20 hover:bg-cyan-600 border border-cyan-500/40 text-cyan-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-            title="Browse all 1,309 questions with serial numbers"
-          >
-            <span>📚</span>
-            <span className="hidden xl:inline">Question Library</span>
-            <span className="font-mono text-[10px] bg-cyan-500/20 px-1 rounded text-cyan-300">1,309</span>
-          </button>
-
-          <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-lg">
-            ✓ {Object.keys(solvedMap).length} Solved
+          <span className="h-8 text-xs font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 rounded-lg whitespace-nowrap shrink-0">
+            ✓ {Object.keys(solvedMap).length} <span className="hidden xl:inline">Solved</span>
           </span>
-
-          <select
-            value={industryDomain}
-            onChange={(e) => setIndustryDomain(e.target.value as IndustryDomain)}
-            className="bg-slate-900 border border-slate-750 text-slate-300 rounded-lg px-2 py-1 text-xs font-medium cursor-pointer"
-            title="Target Industry Domain"
-          >
-            {INDUSTRY_DOMAINS.map((dom) => (
-              <option key={dom} value={dom}>{dom}</option>
-            ))}
-          </select>
 
           <button
             onClick={() => setIsStorageModalOpen(true)}
-            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+            className="w-8 h-8 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs flex items-center justify-center transition cursor-pointer shrink-0 active:scale-95"
             title="Storage Settings & Cloud Backup"
           >
             💾
           </button>
 
-          <UserProfileMenu
-            solvedCount={Object.keys(solvedMap).length}
-            masteredCount={masteredList.length}
-            onSyncAll={handleCloudSyncAll}
-          />
+          <div className="shrink-0">
+            <UserProfileMenu
+              solvedCount={Object.keys(solvedMap).length}
+              masteredCount={masteredList.length}
+              onSyncAll={handleCloudSyncAll}
+            />
+          </div>
         </div>
       </header>
 

@@ -17,7 +17,9 @@ import {
   Flame,
   CheckCircle,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -67,17 +69,29 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
 
   if (!currentUser) {
     return (
-      <div className="flex items-center gap-2">
-        <button
+      <div className="flex items-center gap-1.5 shrink-0">
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
           onClick={() => openAuthModal('signin')}
-          className="relative group flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-cyan-900/30 border border-cyan-400/40 transition active:scale-95 cursor-pointer"
+          className="h-8 px-2.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-750 border border-slate-700/80 hover:border-slate-600 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
+          title="Sign in to sync your SQL progress"
         >
-          <Database className="w-3.5 h-3.5 text-cyan-200" />
-          <span>Sign In / Sign Up</span>
-          <span className="hidden sm:inline-block text-[9px] font-mono px-1.5 py-0.2 rounded bg-black/30 text-cyan-200">
-            Cloud
-          </span>
-        </button>
+          <LogIn className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Sign In</span>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => openAuthModal('signup')}
+          className="relative group overflow-hidden h-8 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 hover:from-indigo-400 hover:to-cyan-400 shadow-md shadow-indigo-500/20 border border-indigo-400/40 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap hidden sm:inline-flex"
+          title="Create a free candidate cloud profile"
+        >
+          <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+          <Sparkles className="w-3.5 h-3.5 text-cyan-200 animate-pulse" />
+          <span>Sign Up</span>
+        </motion.button>
       </div>
     );
   }
@@ -89,51 +103,48 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
   const isGuest = currentUser.uid.startsWith('guest-');
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className="relative shrink-0" ref={menuRef}>
       {/* Trigger Button */}
-      <button
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-cyan-500/50 transition cursor-pointer text-left"
+        className="h-8 flex items-center gap-2 px-2.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-750 hover:border-cyan-500/50 transition cursor-pointer text-left shrink-0 shadow-xs"
         aria-label="User Profile Menu"
       >
         {photo ? (
           <img
             src={photo}
             alt={displayName}
-            className="w-6 h-6 rounded-full border border-cyan-400/60 object-cover"
+            className="w-5 h-5 rounded-full border border-cyan-400/60 object-cover"
           />
         ) : (
-          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">
+          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold shadow-xs">
             {displayName.charAt(0).toUpperCase()}
           </div>
         )}
 
-        <div className="hidden md:flex flex-col text-left">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-slate-200 max-w-[100px] truncate">
-              {displayName}
-            </span>
-            {/* Live Database status beacon */}
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                isGuest
-                  ? 'bg-amber-400'
-                  : syncStatus === 'synced'
-                  ? 'bg-emerald-400 animate-pulse'
-                  : syncStatus === 'saving'
-                  ? 'bg-amber-400 animate-spin'
-                  : 'bg-slate-400'
-              }`}
-              title={isGuest ? 'Guest Mode (SafeStorage)' : syncStatus === 'synced' ? 'Database Connected & Synced' : syncStatus}
-            />
-          </div>
-          <span className="text-[10px] text-cyan-400 font-mono leading-none">
-            {isGuest ? 'Guest User' : (userProfile?.role || 'SQL Dev')}
+        <div className="hidden lg:flex items-center gap-1.5 text-left">
+          <span className="text-xs font-semibold text-slate-200 max-w-[90px] truncate">
+            {displayName}
           </span>
+          {/* Live Database status beacon */}
+          <span
+            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+              isGuest
+                ? 'bg-amber-400'
+                : syncStatus === 'synced'
+                ? 'bg-emerald-400 animate-pulse'
+                : syncStatus === 'saving'
+                ? 'bg-amber-400 animate-spin'
+                : 'bg-slate-400'
+            }`}
+            title={isGuest ? 'Guest Mode (SafeStorage)' : syncStatus === 'synced' ? 'Database Connected & Synced' : syncStatus}
+          />
         </div>
 
-        <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-      </button>
+        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </motion.button>
 
       {/* Dropdown Menu */}
       <AnimatePresence>
