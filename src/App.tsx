@@ -28,9 +28,11 @@ import { AuthModal } from './components/AuthModal';
 import { PlatformFetchModal } from './components/PlatformFetchModal';
 import { QuestionsDirectoryPage } from './components/QuestionsDirectoryPage';
 import { UserProfileMenu } from './components/UserProfileMenu';
+import { SqlCodeEditor } from './components/SqlCodeEditor';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
 import { subscribeToLiveProblems } from './firebase';
+import { AUTHENTIC_PLATFORM_PROBLEMS } from './services/platformQuestionsData';
 import type { LivePipelineStatus } from './types';
 import {
   searchGoogleGroundingSql,
@@ -284,11 +286,24 @@ function generateDiffReport(
       const uVal = uRow !== undefined ? uRow[userColKey] : undefined;
       const eVal = eRow !== undefined ? eRow[col] : undefined;
 
-      const isCellMatch =
-        uRow !== undefined &&
-        eRow !== undefined &&
-        (String(uVal).trim().toLowerCase() === String(eVal).trim().toLowerCase() ||
-          (uVal === null && eVal === null));
+      let isCellMatch = false;
+      if (uRow !== undefined && eRow !== undefined) {
+        if (uVal === null && eVal === null) {
+          isCellMatch = true;
+        } else if (uVal !== null && eVal !== null) {
+          const uStr = String(uVal).trim();
+          const eStr = String(eVal).trim();
+          if (uStr.toLowerCase() === eStr.toLowerCase()) {
+            isCellMatch = true;
+          } else {
+            const uNum = Number(uVal);
+            const eNum = Number(eVal);
+            if (!isNaN(uNum) && !isNaN(eNum) && Math.abs(uNum - eNum) < 0.0001) {
+              isCellMatch = true;
+            }
+          }
+        }
+      }
 
       if (isCellMatch) {
         matchedCells++;
@@ -600,31 +615,39 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
 
   // Execute the query using AlaSQL
   const execResult = runSqlWithAlaSql(cleanCode, problem);
-  let userColumns: string[] = [];
-  let userRows: Record<string, any>[] = [];
 
-  if (execResult.success && execResult.rows !== undefined) {
-    userRows = execResult.rows;
-    userColumns = execResult.columns;
-    if (userColumns.length === 0) {
-      userColumns = extractColumnsFromSql(cleanCode);
-    }
-  } else {
-    // If execution threw an error or dialect requires fallback
+  if (!execResult.success) {
+    return {
+      status: 'SYNTAX_ERROR',
+      executionTimeMs: elapsed,
+      message: execResult.error || 'Syntax / Runtime Error in SQL query execution.',
+      rowsReturned: 0,
+      outputColumns: [],
+      outputRows: [],
+      checklist,
+      diffReport: {
+        isFullMatch: false,
+        accuracyPct: 0,
+        userColumnCount: 0,
+        expectedColumnCount: problem.expectedOutput.columns.length,
+        columnMatch: false,
+        userRowCount: 0,
+        expectedRowCount: problem.expectedOutput.rows.length,
+        rowCountMatch: false,
+        missingColumns: problem.expectedOutput.columns,
+        extraColumns: [],
+        cellDiffs: [],
+        userColumns: [],
+        expectedColumns: problem.expectedOutput.columns,
+        mismatchedRowCount: problem.expectedOutput.rows.length,
+      },
+    };
+  }
+
+  const userRows: Record<string, any>[] = execResult.rows;
+  let userColumns: string[] = execResult.columns;
+  if (userColumns.length === 0) {
     userColumns = extractColumnsFromSql(cleanCode);
-    if (userColumns.length === 0) {
-      userColumns = problem.expectedOutput.columns;
-    }
-
-    if (problem.schemas[0] && problem.schemas[0].sampleRows.length > 0) {
-      userRows = problem.schemas[0].sampleRows.map((sample) => {
-        const obj: Record<string, any> = {};
-        userColumns.forEach((c) => {
-          obj[c] = sample[c] !== undefined ? sample[c] : sample[Object.keys(sample)[0]];
-        });
-        return obj;
-      });
-    }
   }
 
   // Generate visual diff report
@@ -812,17 +835,22 @@ export default function App() {
 
   // Generate current problem
   const problem: SqlProblem = useMemo(() => {
+    let resolved: SqlProblem | undefined;
     if (activeMode === 'live_stream') {
       if (selectedLiveProblemId) {
-        const found = liveProblems.find((p) => p.id === selectedLiveProblemId);
-        if (found) return found;
+        resolved = liveProblems.find((p) => p.id === selectedLiveProblemId);
       }
-      if (liveProblems.length > 0) {
+      if (!resolved && liveProblems.length > 0) {
         const idx = (questionNumber - 1) % liveProblems.length;
-        return liveProblems[idx] || liveProblems[0];
+        resolved = liveProblems[idx] || liveProblems[0];
       }
     }
-    return generateSqlProblem(activeMode, activeTopic, questionNumber, industryDomain);
+    if (!resolved) {
+      resolved = generateSqlProblem(activeMode, activeTopic, questionNumber, industryDomain);
+    }
+    // Always upgrade to authentic problem from official platform database if available
+    const authentic = AUTHENTIC_PLATFORM_PROBLEMS.find((p) => p.id === resolved?.id);
+    return authentic || resolved;
   }, [activeMode, activeTopic, questionNumber, industryDomain, selectedLiveProblemId, liveProblems]);
 
   const handleExecuteGoogleSearch = async (overrideQuery?: string) => {
@@ -881,9 +909,9 @@ export default function App() {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   // Console Tabs & Visual Diff Controls
-  const [consoleTab, setConsoleTab] = useState<'diff' | 'output' | 'checklist'>(() => {
+  const [consoleTab, setConsoleTab] = useState<'diff' | 'output' | 'expected' | 'testcase' | 'checklist'>(() => {
     const saved = safeStorage.getItem('apex_console_tab');
-    return (saved as 'diff' | 'output' | 'checklist') || 'diff';
+    return (saved as 'diff' | 'output' | 'expected' | 'testcase' | 'checklist') || 'diff';
   });
 
   const [diffViewMode, setDiffViewMode] = useState<'split' | 'unified'>(() => {
@@ -1427,18 +1455,26 @@ export default function App() {
           syncQueryToCloud(problem.id, sqlCode, dialect, true);
         }
       } else {
-        const details =
-          result.diffReport?.missingColumns?.length
-            ? `Missing column(s): ${result.diffReport.missingColumns.join(', ')}`
-            : result.diffReport && result.diffReport.userRowCount !== result.diffReport.expectedRowCount
-            ? `Row count mismatch: returned ${result.diffReport.userRowCount} row(s), expected ${result.diffReport.expectedRowCount}`
-            : result.message || 'Output rows or columns do not match expected dataset.';
+        const isSyntax = result.status === 'SYNTAX_ERROR';
+        const details = isSyntax
+          ? result.message
+          : result.diffReport?.missingColumns?.length
+          ? `Missing column(s): ${result.diffReport.missingColumns.join(', ')}`
+          : result.diffReport && result.diffReport.userRowCount !== result.diffReport.expectedRowCount
+          ? `Row count mismatch: returned ${result.diffReport.userRowCount} row(s), expected ${result.diffReport.expectedRowCount}`
+          : result.message || 'Output rows or columns do not match expected dataset.';
 
         setSubmissionVerdict({
           type: 'wrong',
-          title: isSubmit ? 'Wrong Answer • Needs Adjustment' : 'Test Output Mismatch',
-          message: 'Query output does not match expected target specification. Inspect the visual diff below.',
-          accuracyPct: result.diffReport?.accuracyPct ?? 0,
+          title: isSyntax
+            ? 'Runtime / Syntax Error'
+            : isSubmit
+            ? 'Wrong Answer • Needs Adjustment'
+            : 'Test Output Mismatch',
+          message: isSyntax
+            ? result.message
+            : 'Query output does not match expected target specification. Inspect the visual diff below.',
+          accuracyPct: isSyntax ? 0 : (result.diffReport?.accuracyPct ?? 0),
           executionTimeMs: result.executionTimeMs,
           details,
           timestamp: Date.now(),
@@ -2328,7 +2364,7 @@ export default function App() {
 
               <div className="flex items-start justify-between gap-2">
                 <h1 className="text-lg lg:text-xl font-extrabold text-white tracking-tight">
-                  {problem.title}
+                  {problem.title.replace(/^(HackerRank:\s*|LeetCode:\s*)/i, '')}
                 </h1>
 
                 {/* Bookmark / Review toggles */}
@@ -2401,27 +2437,144 @@ export default function App() {
               </div>
             )}
 
-            {/* Business Context & Scenario */}
-            <div className="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 text-xs leading-relaxed text-slate-300">
-              <span className="font-bold text-slate-200 block mb-1 uppercase tracking-wider text-[10px]">
-                Business Context & Problem Statement:
-              </span>
-              <p>{problem.businessScenario}</p>
-            </div>
+            {/* Authentic Problem Statement & Description (HackerRank / LeetCode Format) */}
+            <div className="flex flex-col gap-4 text-sm text-slate-200 leading-relaxed">
+              {/* Problem Statement Prose */}
+              <div className="space-y-3">
+                {problem.businessScenario
+                  .split('\n\n')
+                  .filter(Boolean)
+                  .map((paragraph, pIdx) => {
+                    const isTableIntro = paragraph.toLowerCase().includes('is described as follows:');
 
-            {/* Explicit Requirements Checklist */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider text-[11px]">
-                Explicit Requirements:
-              </span>
-              <ul className="flex flex-col gap-1 text-xs text-slate-300">
-                {problem.requirements.map((req, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="text-indigo-400 font-bold shrink-0">•</span>
-                    <span>{req}</span>
-                  </li>
-                ))}
-              </ul>
+                    return (
+                      <p
+                        key={pIdx}
+                        className={`${
+                          isTableIntro
+                            ? 'font-semibold text-slate-100 pt-1'
+                            : 'text-slate-200'
+                        } leading-relaxed`}
+                      >
+                        {paragraph.split(/(`[^`]+`|\b[A-Z0-9_]{2,}\b)/g).map((chunk, cIdx) => {
+                          const trimmed = chunk.replace(/`/g, '');
+                          const isKnownTableOrCol = problem.schemas?.some(
+                            (s) =>
+                              s.tableName.toUpperCase() === trimmed.toUpperCase() ||
+                              s.columns.some((col) => col.name.toUpperCase() === trimmed.toUpperCase())
+                          );
+                          const isConstant = ['USA', 'JPN', 'NLD'].includes(trimmed);
+
+                          if (chunk.startsWith('`') && chunk.endsWith('`')) {
+                            return (
+                              <code
+                                key={cIdx}
+                                className="font-mono bg-slate-800/90 text-cyan-300 px-1.5 py-0.5 rounded text-xs border border-slate-700 font-semibold"
+                              >
+                                {trimmed}
+                              </code>
+                            );
+                          }
+
+                          if (isKnownTableOrCol || isConstant) {
+                            return (
+                              <span
+                                key={cIdx}
+                                className="font-mono bg-slate-800/80 text-cyan-300 px-1.5 py-0.5 rounded text-xs border border-slate-700/60 font-semibold"
+                              >
+                                {trimmed}
+                              </span>
+                            );
+                          }
+
+                          return <span key={cIdx}>{chunk}</span>;
+                        })}
+                      </p>
+                    );
+                  })}
+              </div>
+
+              {/* Authentic HackerRank / LeetCode Table Schemas */}
+              {problem.schemas && problem.schemas.length > 0 && (
+                <div className="flex flex-col gap-3 pt-1">
+                  {problem.schemas.map((schema) => (
+                    <div
+                      key={schema.tableName}
+                      className="rounded-xl border border-slate-800 bg-[#0c1322] overflow-hidden shadow-sm"
+                    >
+                      <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                          <span>📋</span>
+                          <span>{schema.tableName}</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {schema.columns.length} columns
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 text-[10px] text-slate-400 uppercase tracking-wider bg-slate-900/50">
+                              <th className="py-1.5 px-3.5 font-semibold">Field</th>
+                              <th className="py-1.5 px-3.5 font-semibold">Type</th>
+                              <th className="py-1.5 px-3.5 font-semibold">Description</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60">
+                            {schema.columns.map((col) => (
+                              <tr key={col.name} className="hover:bg-slate-800/40 transition-colors">
+                                <td className="py-1.5 px-3.5 font-mono text-cyan-300 font-bold text-xs">
+                                  {col.name}
+                                </td>
+                                <td className="py-1.5 px-3.5 font-mono text-amber-300/90 text-[11px]">
+                                  {col.type}
+                                </td>
+                                <td className="py-1.5 px-3.5 text-slate-400 text-xs">
+                                  {col.description || (col.isPk ? 'Primary Key' : '—')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Meaningful Specific Requirements / Constraints */}
+              {(() => {
+                const meaningful = (problem.requirements || []).filter((r) => {
+                  const l = r.toLowerCase();
+                  return (
+                    !l.includes('query required columns') &&
+                    !l.includes('handle relational filters') &&
+                    !l.includes('follow exact hackerrank') &&
+                    !l.includes('execute query against') &&
+                    !l.includes('satisfy primary and edge-case') &&
+                    !l.includes('project exact column aliases')
+                  );
+                });
+
+                if (meaningful.length === 0) return null;
+
+                return (
+                  <div className="flex flex-col gap-2 p-3 bg-slate-900/60 rounded-xl border border-slate-800/80">
+                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <span className="text-indigo-400">⚡</span>
+                      Constraints & Specific Rules:
+                    </span>
+                    <ul className="flex flex-col gap-1.5 text-xs text-slate-300">
+                      {meaningful.map((req, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                          <span>{req}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Tabbed Data Explorer: Tab A (Schema & Sample) vs Tab B (Expected Output) */}
@@ -2788,30 +2941,15 @@ export default function App() {
             </div>
           </div>
 
-          {/* Line-Numbered SQL Editor (Synchronized scroll & no overlapping) */}
-          <div className="relative flex bg-[#070b14] border-b border-slate-800 h-64 min-h-[160px] shrink-0 overflow-hidden">
-            {/* Line numbers column (Scroll synced with textarea) */}
-            <div
-              ref={lineNumbersRef}
-              className="w-10 bg-[#090d18] text-slate-600 select-none py-3 px-1 text-right font-mono text-xs border-r border-slate-850 overflow-hidden"
-            >
-              {lineNumbers.map((num) => (
-                <div key={num} className="leading-6">
-                  {num}
-                </div>
-              ))}
-            </div>
-
-            {/* Code textarea with synced onScroll */}
-            <textarea
-              ref={textareaRef}
+          {/* Real-time Syntax Highlighted SQL Editor (LeetCode style) */}
+          <div className="p-3 bg-[#090d16] border-b border-slate-800">
+            <SqlCodeEditor
               value={sqlCode}
-              onChange={(e) => handleCodeChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onScroll={handleEditorScroll}
-              spellCheck={false}
-              className="flex-1 bg-transparent text-slate-100 font-mono text-xs lg:text-sm p-3 leading-6 resize-none focus:outline-none focus:ring-0 selection:bg-indigo-600/40 overflow-y-auto overflow-x-auto whitespace-pre"
-              placeholder="-- Write your SQL query here..."
+              onChange={handleCodeChange}
+              onRun={handleRunQuery}
+              onSubmit={handleSubmitQuery}
+              dialect={dialect}
+              height="h-64 lg:h-72"
             />
           </div>
 
@@ -2965,6 +3103,29 @@ export default function App() {
                       {executionResult.rowsReturned} rows
                     </span>
                   )}
+                </button>
+                <button
+                  onClick={() => setConsoleTab('expected')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    consoleTab === 'expected'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800'
+                  }`}
+                >
+                  <span>Expected Output 🎯</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                    {problem.expectedOutput.rows.length} rows
+                  </span>
+                </button>
+                <button
+                  onClick={() => setConsoleTab('testcase')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    consoleTab === 'testcase'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800'
+                  }`}
+                >
+                  <span>Testcase (Input) 🗄️</span>
                 </button>
                 <button
                   onClick={() => setConsoleTab('checklist')}
@@ -3541,6 +3702,111 @@ export default function App() {
                       Click &quot;Run Code&quot; to test your query against structural validation rules.
                     </div>
                   )}
+                </motion.div>
+              )}
+
+              {/* TAB CONTENT: 4. EXPECTED OUTPUT TABLE */}
+              {consoleTab === 'expected' && (
+                <motion.div
+                  key="tab-expected"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.16 }}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-300">
+                        Official Expected Target Output ({problem.expectedOutput.rows.length} rows):
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/80 max-h-64">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-900 text-cyan-300 font-mono text-[10px] uppercase">
+                          <tr>
+                            <th className="px-2 py-1.5 border-b border-slate-800 w-8">#</th>
+                            {problem.expectedOutput.columns.map((col, idx) => (
+                              <th key={idx} className="px-3 py-2 border-b border-slate-800">
+                                {col}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-900 font-mono text-slate-200">
+                          {problem.expectedOutput.rows.map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-slate-900/40">
+                              <td className="px-2 py-1.5 text-slate-500 text-[10px]">{rIdx + 1}</td>
+                              {problem.expectedOutput.columns.map((col, cIdx) => (
+                                <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap">
+                                  {row[col] === null ? (
+                                    <span className="text-slate-600 italic">NULL</span>
+                                  ) : (
+                                    String(row[col])
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* TAB CONTENT: 5. TESTCASE (INPUT SCHEMA TABLES) */}
+              {consoleTab === 'testcase' && (
+                <motion.div
+                  key="tab-testcase"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.16 }}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex flex-col gap-3">
+                    <span className="font-bold uppercase tracking-wider text-[11px] text-slate-300">
+                      Input Testcase Tables & Sample Rows:
+                    </span>
+                    {problem.schemas.map((schema, sIdx) => (
+                      <div key={sIdx} className="flex flex-col gap-1.5 bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                        <div className="flex items-center justify-between text-xs font-mono font-bold text-slate-200">
+                          <span className="text-cyan-400">TABLE [{schema.tableName}]</span>
+                          <span className="text-slate-500 text-[10px]">{schema.sampleRows.length} sample rows</span>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-slate-850 bg-slate-900/40 max-h-48">
+                          <table className="w-full text-[11px] text-left">
+                            <thead className="bg-slate-900 text-slate-400 font-mono text-[10px] uppercase">
+                              <tr>
+                                {schema.columns.map((col, cIdx) => (
+                                  <th key={cIdx} className="px-2.5 py-1.5 border-b border-slate-800">
+                                    {col.name} ({col.type})
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-850 font-mono text-slate-300">
+                              {schema.sampleRows.map((row, rIdx) => (
+                                <tr key={rIdx} className="hover:bg-slate-900/60">
+                                  {schema.columns.map((col, cIdx) => (
+                                    <td key={cIdx} className="px-2.5 py-1 whitespace-nowrap">
+                                      {row[col.name] === null ? (
+                                        <span className="text-slate-600 italic">NULL</span>
+                                      ) : (
+                                        String(row[col.name])
+                                      )}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
