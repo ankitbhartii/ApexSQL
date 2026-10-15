@@ -93,7 +93,7 @@ export interface SqlProblem {
   id: string;
   questionNumber: number;
   title: string;
-  platform: 'LeetCode' | 'HackerRank' | 'FAANG+ Mock' | 'Skill Matrix' | 'Live Contest / Interview';
+  platform: 'LeetCode' | 'HackerRank' | 'DataDriven' | 'FAANG+ Mock' | 'Skill Matrix' | 'Live Contest / Interview';
   difficulty: Difficulty;
   skillLevel: SkillLevel;
   industry: IndustryDomain;

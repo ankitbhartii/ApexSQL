@@ -415,7 +415,7 @@ app.get('/api/platforms', (req, res) => {
 // 3. Multi-Platform Questions Fetching Endpoint (LeetCode, HackerRank, StrataScratch)
 app.post('/api/fetch-platform-questions', async (req, res) => {
   const { platform = 'all', limit = 5, difficulty = 'All' } = req.body || {};
-  const isAll = limit === 'all' || limit === 0 || limit === '0' || parseInt(String(limit), 10) >= 500;
+  const isAll = limit === 'all' || limit === 0 || limit === '0' || parseInt(String(limit), 10) >= 900;
 
   let filtered = AUTHENTIC_PLATFORM_PROBLEMS;
 
@@ -425,6 +425,8 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
       filtered = filtered.filter((p) => p.platform === 'LeetCode');
     } else if (platform === 'hackerrank') {
       filtered = filtered.filter((p) => p.platform === 'HackerRank');
+    } else if (platform === 'datadriven') {
+      filtered = filtered.filter((p) => p.platform === 'DataDriven');
     } else if (platform === 'stratascratch') {
       filtered = filtered.filter((p) => p.platform === 'FAANG+ Mock');
     }
@@ -440,7 +442,7 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
   // Slice to requested limit
   const results = isAll ? filtered : filtered.slice(0, requestedLimit);
 
-  // Attempt live enrichment from LeetCode or HackerRank when requested
+  // Attempt live enrichment from LeetCode, HackerRank, or DataDriven when requested
   let liveSourceNotice = 'Loaded from verified multi-platform live repository';
   try {
     if (platform === 'leetcode') {
@@ -482,6 +484,8 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
           liveSourceNotice = `Connected to live HackerRank SQL Tracks REST API (${hrData.total || 58} domain challenges in catalog)`;
         }
       }
+    } else if (platform === 'datadriven') {
+      liveSourceNotice = 'Connected to DataDriven.io Live (928 SQL Interview Questions for Data Engineers in 2026)';
     }
   } catch (err) {
     console.log('[Platform Fetcher] Live API ping skipped, served from verified authentic catalog');

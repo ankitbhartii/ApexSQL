@@ -6,7 +6,7 @@
 import { SqlProblem, TableSchema } from '../types';
 
 export interface PlatformInfo {
-  id: 'leetcode' | 'hackerrank' | 'stratascratch' | 'all';
+  id: 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch' | 'all';
   name: string;
   tagline: string;
   icon: string;
@@ -31,9 +31,23 @@ export const SUPPORTED_PLATFORMS: PlatformInfo[] = [
     borderColor: 'border-indigo-500/30',
     badgeColor: 'bg-indigo-500/20 text-indigo-300',
     apiEndpoint: '/api/fetch-platform-questions?platform=all',
-    description: 'Unified stream aggregating LeetCode Database (323 Qs), HackerRank SQL Track (58 Qs), and FAANG case challenges.',
-    totalAvailable: 431,
+    description: 'Unified stream aggregating LeetCode Database (323 Qs), HackerRank SQL Track (58 Qs), DataDriven.io (928 Qs), and FAANG case challenges.',
+    totalAvailable: 1309,
     companies: ['Google', 'Meta', 'Amazon', 'Apple', 'Uber', 'Netflix', 'Stripe', 'Goldman Sachs'],
+  },
+  {
+    id: 'datadriven',
+    name: 'DataDriven.io',
+    tagline: '928 SQL Interview Questions (2026)',
+    icon: '⚡',
+    color: 'text-cyan-400',
+    bgLight: 'bg-cyan-500/10',
+    borderColor: 'border-cyan-500/30',
+    badgeColor: 'bg-cyan-500/20 text-cyan-300',
+    apiEndpoint: 'https://datadriven.io/sql-interview-questions',
+    description: '928 authentic SQL interview questions from Meta, Amazon, Apple, Netflix, Google, Microsoft, Nvidia, Tesla, Uber reported data engineer loops.',
+    totalAvailable: 928,
+    companies: ['Meta', 'Amazon', 'Apple', 'Netflix', 'Google', 'Microsoft', 'Nvidia', 'Tesla', 'Uber', 'Airbnb'],
   },
   {
     id: 'leetcode',
@@ -18879,8 +18893,12 @@ export const ALL_LEETCODE_PROBLEMS: SqlProblem[] = [
   }
 ];
 
-// Master Consolidated Multi-Platform Catalog (431 Total: 58 HackerRank + 323 LeetCode + 50 FAANG)
+import { ALL_DATADRIVEN_PROBLEMS } from './datadrivenQuestionsData';
+export { ALL_DATADRIVEN_PROBLEMS };
+
+// Master Consolidated Multi-Platform Catalog (1309 Total: 58 HackerRank + 323 LeetCode + 928 DataDriven.io)
 export const AUTHENTIC_PLATFORM_PROBLEMS: SqlProblem[] = [
   ...ALL_HACKERRANK_PROBLEMS,
   ...ALL_LEETCODE_PROBLEMS,
+  ...ALL_DATADRIVEN_PROBLEMS,
 ];
