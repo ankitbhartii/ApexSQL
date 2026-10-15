@@ -134,14 +134,15 @@ export interface UserProgressCloud {
 }
 
 export async function syncUserProfile(user: User, additionalData?: { role?: string; xpPoints?: number }) {
-  if (!user?.uid || user.uid.startsWith('guest-')) return;
+  if (!user?.uid || user.uid.startsWith('guest-')) return null;
   const userRef = doc(db, 'users', user.uid);
   const path = `users/${user.uid}`;
   try {
     const existing = await getDoc(userRef);
     const now = new Date().toISOString();
+    let profileData: any;
     if (!existing.exists()) {
-      await setDoc(userRef, {
+      profileData = {
         uid: user.uid,
         email: user.email || '',
         displayName: user.displayName || user.email?.split('@')[0] || 'SQL Candidate',
@@ -153,19 +154,29 @@ export async function syncUserProfile(user: User, additionalData?: { role?: stri
         role: additionalData?.role || 'Data Professional',
         createdAt: now,
         updatedAt: now,
-      });
+      };
+      await setDoc(userRef, profileData);
     } else {
-      await setDoc(userRef, {
+      const current = existing.data();
+      profileData = {
         uid: user.uid,
-        email: user.email || existing.data().email || '',
-        displayName: user.displayName || existing.data().displayName || 'SQL Candidate',
-        photoURL: user.photoURL || existing.data().photoURL || '',
+        email: user.email || current.email || '',
+        displayName: user.displayName || current.displayName || 'SQL Candidate',
+        photoURL: user.photoURL || current.photoURL || '',
+        totalSolved: current.totalSolved || 0,
+        masteredCount: current.masteredCount || 0,
+        streakDays: current.streakDays || 1,
+        xpPoints: current.xpPoints || 100,
+        role: current.role || 'Data Professional',
         updatedAt: now,
         ...(additionalData || {})
-      }, { merge: true });
+      };
+      await setDoc(userRef, profileData, { merge: true });
     }
+    return profileData;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+    return null;
   }
 }
 

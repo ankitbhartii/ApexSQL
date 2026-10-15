@@ -1170,6 +1170,30 @@ export default function App() {
   }, [mobileView]);
 
   useEffect(() => {
+    if (Object.keys(solvedMap).length > 0) {
+      safeStorage.setItem('apex_solved_problems', JSON.stringify(solvedMap));
+    }
+  }, [solvedMap]);
+
+  useEffect(() => {
+    if (masteredList.length > 0) {
+      safeStorage.setItem('apex_mastered_problems', JSON.stringify(masteredList));
+    }
+  }, [masteredList]);
+
+  useEffect(() => {
+    if (reviewList.length > 0) {
+      safeStorage.setItem('apex_review_problems', JSON.stringify(reviewList));
+    }
+  }, [reviewList]);
+
+  useEffect(() => {
+    if (Object.keys(notesMap).length > 0) {
+      safeStorage.setItem('apex_problem_notes', JSON.stringify(notesMap));
+    }
+  }, [notesMap]);
+
+  useEffect(() => {
     safeStorage.setItem('apex_console_tab', consoleTab);
   }, [consoleTab]);
 
@@ -1262,51 +1286,67 @@ export default function App() {
     const loadCloudData = async () => {
       try {
         const cloudProgress = await fetchCloudProgress();
-        if (!isMounted || !cloudProgress) return;
+        if (!isMounted) return;
 
-        if (cloudProgress.solvedProblems && cloudProgress.solvedProblems.length > 0) {
-          setSolvedMap((prev) => {
-            const merged = { ...prev };
-            cloudProgress.solvedProblems.forEach((id) => {
-              if (!merged[id]) {
-                merged[id] = { status: 'ACCEPTED', timestamp: Date.now() };
-              }
-            });
-            safeStorage.setItem('apex_solved_problems', JSON.stringify(merged));
-            return merged;
+        // 1. Solved Problems: Bidirectional union between Cloud and Local Storage
+        const localSolvedRaw = safeStorage.getItem('apex_solved_problems');
+        const localSolvedObj: Record<string, { status: string; timestamp: number }> = localSolvedRaw
+          ? JSON.parse(localSolvedRaw)
+          : {};
+
+        const mergedSolved: Record<string, { status: string; timestamp: number }> = { ...localSolvedObj };
+        if (cloudProgress?.solvedProblems && Array.isArray(cloudProgress.solvedProblems)) {
+          cloudProgress.solvedProblems.forEach((id) => {
+            if (!mergedSolved[id]) {
+              mergedSolved[id] = { status: 'ACCEPTED', timestamp: Date.now() };
+            }
           });
         }
+        setSolvedMap((prev) => ({ ...prev, ...mergedSolved }));
+        safeStorage.setItem('apex_solved_problems', JSON.stringify(mergedSolved));
 
-        if (cloudProgress.masteredProblems && cloudProgress.masteredProblems.length > 0) {
-          setMasteredList((prev) => {
-            const merged = Array.from(new Set([...prev, ...cloudProgress.masteredProblems]));
-            safeStorage.setItem('apex_mastered_problems', JSON.stringify(merged));
-            return merged;
-          });
-        }
+        // 2. Mastered Problems: Union
+        const localMasteredRaw = safeStorage.getItem('apex_mastered_problems');
+        const localMastered: string[] = localMasteredRaw ? JSON.parse(localMasteredRaw) : [];
+        const cloudMastered: string[] = cloudProgress?.masteredProblems || [];
+        const mergedMastered = Array.from(new Set([...localMastered, ...cloudMastered]));
+        setMasteredList(mergedMastered);
+        safeStorage.setItem('apex_mastered_problems', JSON.stringify(mergedMastered));
 
-        if (cloudProgress.reviewProblems && cloudProgress.reviewProblems.length > 0) {
-          setReviewList((prev) => {
-            const merged = Array.from(new Set([...prev, ...cloudProgress.reviewProblems]));
-            safeStorage.setItem('apex_review_problems', JSON.stringify(merged));
-            return merged;
-          });
-        }
+        // 3. Review Problems: Union
+        const localReviewRaw = safeStorage.getItem('apex_review_problems');
+        const localReview: string[] = localReviewRaw ? JSON.parse(localReviewRaw) : [];
+        const cloudReview: string[] = cloudProgress?.reviewProblems || [];
+        const mergedReview = Array.from(new Set([...localReview, ...cloudReview]));
+        setReviewList(mergedReview);
+        safeStorage.setItem('apex_review_problems', JSON.stringify(mergedReview));
 
-        if (cloudProgress.notesMap && Object.keys(cloudProgress.notesMap).length > 0) {
-          setNotesMap((prev) => {
-            const merged = { ...prev, ...cloudProgress.notesMap };
-            safeStorage.setItem('apex_problem_notes', JSON.stringify(merged));
-            return merged;
-          });
-        }
+        // 4. Notes: Union
+        const localNotesRaw = safeStorage.getItem('apex_problem_notes');
+        const localNotes: Record<string, string> = localNotesRaw ? JSON.parse(localNotesRaw) : {};
+        const cloudNotes: Record<string, string> = cloudProgress?.notesMap || {};
+        const mergedNotes = { ...localNotes, ...cloudNotes };
+        setNotesMap(mergedNotes);
+        safeStorage.setItem('apex_problem_notes', JSON.stringify(mergedNotes));
 
+        // 5. Cloud Queries: Union
         const cloudQueries = await fetchCloudQueries();
         if (cloudQueries && Object.keys(cloudQueries).length > 0) {
           setSavedQueries((prev) => {
             const merged = { ...prev, ...cloudQueries };
             safeStorage.setItem('apex_saved_user_queries', JSON.stringify(merged));
             return merged;
+          });
+        }
+
+        // 6. Push unified union back to Cloud Firestore so both local & cloud are 100% consistent
+        const allSolvedKeys = Object.keys(mergedSolved);
+        if (allSolvedKeys.length > 0 || mergedMastered.length > 0 || mergedReview.length > 0) {
+          await syncProgressToCloud({
+            solvedProblems: allSolvedKeys,
+            masteredProblems: mergedMastered,
+            reviewProblems: mergedReview,
+            notesMap: mergedNotes,
           });
         }
 
@@ -1614,22 +1654,6 @@ export default function App() {
           timestamp: Date.now(),
           isSubmit,
         });
-
-        if (solvedMap[problem.id]) {
-          const updatedSolved = { ...solvedMap };
-          delete updatedSolved[problem.id];
-          setSolvedMap(updatedSolved);
-          safeStorage.setItem('apex_solved_problems', JSON.stringify(updatedSolved));
-          if (currentUser) {
-            syncProgressToCloud({
-              solvedProblems: Object.keys(updatedSolved),
-              masteredProblems: masteredList,
-              reviewProblems: reviewList,
-              notesMap,
-            });
-            syncQueryToCloud(problem.id, sqlCode, dialect, false);
-          }
-        }
       }
       setIsExecuting(false);
     }, 240);

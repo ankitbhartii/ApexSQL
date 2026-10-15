@@ -83,16 +83,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCurrentUser(user);
       if (user) {
         try {
-          await syncUserProfile(user);
-          setUserProfile({
-            uid: user.uid,
-            email: user.email || '',
-            displayName: user.displayName || user.email?.split('@')[0] || 'SQL Candidate',
-            photoURL: user.photoURL || undefined,
-            role: 'Data Engineer / Analyst',
-            streakDays: 3,
-            xpPoints: 240
-          });
+          const profile = await syncUserProfile(user);
+          setUserProfile(
+            profile || {
+              uid: user.uid,
+              email: user.email || '',
+              displayName: user.displayName || user.email?.split('@')[0] || 'SQL Candidate',
+              photoURL: user.photoURL || undefined,
+              role: 'Data Engineer / Analyst',
+              streakDays: 1,
+              xpPoints: 100,
+            }
+          );
           setSyncStatus('synced');
           setLastSyncedAt(new Date());
         } catch (err) {
