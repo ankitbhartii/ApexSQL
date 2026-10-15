@@ -158,130 +158,131 @@ function pick<T>(arr: T[], seed: number): T {
 
 // 1. Beginner: SELECT, WHERE & Basic Filtering
 function generateBeginnerBasics(qNum: number, domain: IndustryDomain, mode: Mode): SqlProblem {
-  const archetypes = [
-    {
-      sub: 'status_filter',
-      title: `${domain} Active Records & Value Threshold`,
-      targetTable: `${domain.toLowerCase()}_records`,
-      statusVal: pick(['ACTIVE', 'VERIFIED', 'COMPLETED', 'DELIVERED', 'APPROVED'], qNum),
-      minScore: ((qNum * 17) % 70) + 15,
-      scenario: `You are analyzing the operational data table. Retrieve all ${domain} records that have an operational status of ':status' and an activity score greater than or equal to :score. Sort results by ID ascending.`,
-      cols: [
-        { name: 'record_id', type: 'INT', isPk: true },
-        { name: 'entity_name', type: 'VARCHAR(100)' },
-        { name: 'status', type: 'VARCHAR(30)' },
-        { name: 'activity_score', type: 'INT' },
-        { name: 'created_date', type: 'DATE' },
-      ],
-      sample: [
-        { record_id: 101, entity_name: 'Nexus Corp', status: 'ACTIVE', activity_score: 82, created_date: '2024-01-10' },
-        { record_id: 102, entity_name: 'Vortex Global', status: 'PENDING', activity_score: 45, created_date: '2024-01-12' },
-        { record_id: 103, entity_name: 'Solaris Health', status: 'ACTIVE', activity_score: 64, created_date: '2024-01-15' },
-        { record_id: 104, entity_name: 'Alpha Logistics', status: 'INACTIVE', activity_score: 91, created_date: '2024-01-18' },
-        { record_id: 105, entity_name: 'Zenith Labs', status: 'ACTIVE', activity_score: 30, created_date: '2024-01-20' },
-      ],
-      req: [
-        'Select record_id, entity_name, and activity_score.',
-        'Filter where status is exactly equal to the target value.',
-        'Filter where activity_score >= target threshold.',
-        'Order by record_id ASC.',
-      ],
-    },
-    {
-      sub: 'null_checks',
-      title: `${domain} Incomplete Profiles & Missing Data Audits`,
-      targetTable: `${domain.toLowerCase()}_accounts`,
-      statusVal: pick(['TIER_1', 'PREMIUM', 'ENTERPRISE', 'STANDARD'], qNum),
-      minScore: 0,
-      scenario: `Audit team needs a list of all ${domain} accounts that are registered as ':status' but have a missing phone number or null verification date. These require operational outreach.`,
-      cols: [
+  const isNullChecks = qNum % 2 === 1;
+  const statusVal = isNullChecks
+    ? pick(['TIER_1', 'PREMIUM', 'ENTERPRISE', 'STANDARD'], qNum)
+    : pick(['ACTIVE', 'VERIFIED', 'COMPLETED', 'DELIVERED', 'APPROVED'], qNum);
+  const minScore = ((qNum * 17) % 70) + 15;
+
+  const targetTable = isNullChecks ? `${domain.toLowerCase()}_accounts` : `${domain.toLowerCase()}_records`;
+  const sub = isNullChecks ? 'null_checks' : 'status_filter';
+  const title = isNullChecks
+    ? `${domain} Incomplete Profiles & Missing Data Audits`
+    : `${domain} Active Records & Value Threshold`;
+
+  const scenario = isNullChecks
+    ? `Audit team needs a list of all ${domain} accounts that are registered as '${statusVal}' but have a missing phone number or null verification date. These require operational outreach.`
+    : `You are analyzing the operational data table. Retrieve all ${domain} records that have an operational status of '${statusVal}' and an activity score greater than or equal to ${minScore}. Sort results by ID ascending.`;
+
+  const cols = isNullChecks
+    ? [
         { name: 'account_id', type: 'INT', isPk: true },
         { name: 'account_name', type: 'VARCHAR(80)' },
         { name: 'account_tier', type: 'VARCHAR(25)' },
         { name: 'phone_number', type: 'VARCHAR(30)' },
         { name: 'verified_at', type: 'TIMESTAMP' },
-      ],
-      sample: [
-        { account_id: 501, account_name: 'Acme Systems', account_tier: 'ENTERPRISE', phone_number: '+1-555-0100', verified_at: '2024-02-01 10:00:00' },
-        { account_id: 502, account_name: 'Beacon Health', account_tier: 'ENTERPRISE', phone_number: null, verified_at: '2024-02-03 14:30:00' },
-        { account_id: 503, account_name: 'Crest Retail', account_tier: 'STANDARD', phone_number: null, verified_at: null },
-        { account_id: 504, account_name: 'Delta Global', account_tier: 'ENTERPRISE', phone_number: '+1-555-0199', verified_at: null },
-      ],
-      req: [
+      ]
+    : [
+        { name: 'record_id', type: 'INT', isPk: true },
+        { name: 'entity_name', type: 'VARCHAR(100)' },
+        { name: 'status', type: 'VARCHAR(30)' },
+        { name: 'activity_score', type: 'INT' },
+        { name: 'created_date', type: 'DATE' },
+      ];
+
+  const sampleRows = isNullChecks
+    ? [
+        { account_id: 501, account_name: 'Acme Systems', account_tier: statusVal, phone_number: '+1-555-0100', verified_at: '2024-02-01 10:00:00' },
+        { account_id: 502, account_name: 'Beacon Health', account_tier: statusVal, phone_number: null, verified_at: '2024-02-03 14:30:00' },
+        { account_id: 503, account_name: 'Crest Retail', account_tier: statusVal === 'STANDARD' ? 'ENTERPRISE' : 'STANDARD', phone_number: null, verified_at: null },
+        { account_id: 504, account_name: 'Delta Global', account_tier: statusVal, phone_number: '+1-555-0199', verified_at: null },
+        { account_id: 505, account_name: 'Echo Dynamics', account_tier: statusVal, phone_number: null, verified_at: null },
+      ]
+    : [
+        { record_id: 101, entity_name: 'Nexus Corp', status: statusVal, activity_score: Math.max(minScore + 15, 82), created_date: '2024-01-10' },
+        { record_id: 102, entity_name: 'Vortex Global', status: 'PENDING', activity_score: 45, created_date: '2024-01-12' },
+        { record_id: 103, entity_name: 'Solaris Health', status: statusVal, activity_score: Math.max(minScore + 5, 64), created_date: '2024-01-15' },
+        { record_id: 104, entity_name: 'Alpha Logistics', status: 'INACTIVE', activity_score: 91, created_date: '2024-01-18' },
+        { record_id: 105, entity_name: 'Zenith Labs', status: statusVal, activity_score: Math.max(minScore - 10, 10), created_date: '2024-01-20' },
+      ];
+
+  const req = isNullChecks
+    ? [
         'Select account_id and account_name.',
         'Filter where account_tier = target tier.',
         'Include records where phone_number IS NULL OR verified_at IS NULL.',
         'Sort by account_id ASC.',
-      ],
-    },
-  ];
+      ]
+    : [
+        'Select record_id, entity_name, and activity_score.',
+        'Filter where status is exactly equal to the target value.',
+        'Filter where activity_score >= target threshold.',
+        'Order by record_id ASC.',
+      ];
 
-  const arch = archetypes[qNum % archetypes.length];
-  const renderedScenario = arch.scenario.replace(':status', arch.statusVal).replace(':score', String(arch.minScore));
-
-  const sampleFiltered = (arch.sample as Record<string, any>[]).filter((row) => {
-    if (arch.sub === 'status_filter') {
-      return (row.status === arch.statusVal || row.status === 'ACTIVE') && row.activity_score >= 50;
+  const sampleFiltered = sampleRows.filter((row: any) => {
+    if (!isNullChecks) {
+      return row.status === statusVal && row.activity_score >= minScore;
     }
-    return row.phone_number === null || row.verified_at === null;
+    return row.account_tier === statusVal && (row.phone_number === null || row.verified_at === null);
   });
 
-  const sqlPostgres = arch.sub === 'status_filter'
-    ? `SELECT record_id, entity_name, activity_score\nFROM ${arch.targetTable}\nWHERE status = '${arch.statusVal}'\n  AND activity_score >= ${arch.minScore}\nORDER BY record_id ASC;`
-    : `SELECT account_id, account_name\nFROM ${arch.targetTable}\nWHERE account_tier = '${arch.statusVal}'\n  AND (phone_number IS NULL OR verified_at IS NULL)\nORDER BY account_id ASC;`;
+  const sqlPostgres = isNullChecks
+    ? `SELECT account_id, account_name\nFROM ${targetTable}\nWHERE account_tier = '${statusVal}'\n  AND (phone_number IS NULL OR verified_at IS NULL)\nORDER BY account_id ASC;`
+    : `SELECT record_id, entity_name, activity_score\nFROM ${targetTable}\nWHERE status = '${statusVal}'\n  AND activity_score >= ${minScore}\nORDER BY record_id ASC;`;
 
   return {
-    id: `BAS-${qNum}-${arch.sub}`,
+    id: `BAS-${qNum}-${sub}`,
     questionNumber: qNum,
-    title: `[Q#${qNum}] ${arch.title}`,
+    title: `[Q#${qNum}] ${title}`,
     platform: mode === 'leetcode' ? 'LeetCode' : mode === 'hackerrank' ? 'HackerRank' : 'Skill Matrix',
     difficulty: 'Easy',
     skillLevel: 'Beginner',
     industry: domain,
     topic: 'beginner_basics',
     topicLabel: 'SELECT, WHERE & Filtering',
-    businessScenario: renderedScenario,
-    requirements: arch.req,
+    businessScenario: scenario,
+    requirements: req,
     schemas: [
       {
-        tableName: arch.targetTable,
-        columns: arch.cols,
-        sampleRows: arch.sample,
+        tableName: targetTable,
+        columns: cols,
+        sampleRows: sampleRows,
       },
     ],
     expectedOutput: {
-      columns: arch.sub === 'status_filter' ? ['record_id', 'entity_name', 'activity_score'] : ['account_id', 'account_name'],
-      rows: sampleFiltered.length > 0 ? sampleFiltered.map((r: Record<string, any>) => arch.sub === 'status_filter' ? { record_id: r.record_id, entity_name: r.entity_name, activity_score: r.activity_score } : { account_id: r.account_id, account_name: r.account_name }) : [
-        arch.sub === 'status_filter' ? { record_id: 101, entity_name: 'Nexus Corp', activity_score: 82 } : { account_id: 502, account_name: 'Beacon Health' }
-      ],
+      columns: isNullChecks ? ['account_id', 'account_name'] : ['record_id', 'entity_name', 'activity_score'],
+      rows: isNullChecks
+        ? sampleFiltered.map((r: any) => ({ account_id: r.account_id, account_name: r.account_name }))
+        : sampleFiltered.map((r: any) => ({ record_id: r.record_id, entity_name: r.entity_name, activity_score: r.activity_score })),
     },
     hints: {
       tier1: 'Focus on writing a straightforward SELECT statement with precise column names, then construct the WHERE predicate.',
-      tier2: arch.sub === 'status_filter'
+      tier2: !isNullChecks
         ? 'Combine conditions with AND: WHERE status = ? AND activity_score >= ?'
         : 'Use parentheses when combining AND with OR: WHERE tier = ? AND (col1 IS NULL OR col2 IS NULL)',
-      tier3Skeleton: `-- Fill in the blanks\nSELECT ...\nFROM ${arch.targetTable}\nWHERE ...\nORDER BY ... ASC;`,
+      tier3Skeleton: `-- Fill in the blanks\nSELECT ...\nFROM ${targetTable}\nWHERE ...\nORDER BY ... ASC;`,
     },
     starterCodeByDialect: {
-      postgres: `-- PostgreSQL 15\nSELECT\n  -- write column names here\nFROM ${arch.targetTable}\nWHERE 1=1;\n`,
-      snowflake: `-- Snowflake SQL\nSELECT\n  -- write column names here\nFROM ${arch.targetTable}\nWHERE 1=1;\n`,
-      bigquery: `-- GoogleSQL (BigQuery)\nSELECT\n  -- write column names here\nFROM \`${arch.targetTable}\`\nWHERE TRUE;\n`,
-      mysql: `-- MySQL 8.0\nSELECT\n  -- write column names here\nFROM ${arch.targetTable}\nWHERE 1=1;\n`,
+      postgres: `-- PostgreSQL 15\nSELECT\n  -- write column names here\nFROM ${targetTable}\nWHERE 1=1;\n`,
+      snowflake: `-- Snowflake SQL\nSELECT\n  -- write column names here\nFROM ${targetTable}\nWHERE 1=1;\n`,
+      bigquery: `-- GoogleSQL (BigQuery)\nSELECT\n  -- write column names here\nFROM \`${targetTable}\`\nWHERE TRUE;\n`,
+      mysql: `-- MySQL 8.0\nSELECT\n  -- write column names here\nFROM ${targetTable}\nWHERE 1=1;\n`,
     },
     officialSolutionByDialect: {
       postgres: sqlPostgres,
       snowflake: sqlPostgres,
-      bigquery: sqlPostgres.replace(arch.targetTable, `\`${arch.targetTable}\``),
+      bigquery: sqlPostgres.replace(targetTable, `\`${targetTable}\``),
       mysql: sqlPostgres,
     },
     deepDive: {
       executionOrder: [
-        `1. FROM ${arch.targetTable} - Read table storage blocks`,
+        `1. FROM ${targetTable} - Read table storage blocks`,
         '2. WHERE - Evaluates filter conditions row by row; discards non-matching tuples',
         '3. SELECT - Projects requested columns only',
         '4. ORDER BY - Sorts remaining rows according to key',
       ],
-      indexStrategy: `CREATE INDEX idx_${arch.targetTable}_status ON ${arch.targetTable} (${arch.cols[2].name}); Allows an index seek rather than a sequential table scan.`,
+      indexStrategy: `CREATE INDEX idx_${targetTable}_status ON ${targetTable} (${cols[2].name}); Allows an index seek rather than a sequential table scan.`,
       complexity: 'Time Complexity: O(N) worst case table scan, O(log N + K) with B-Tree index. Space Complexity: O(K) where K is number of matched rows.',
       tradeoffs: 'Avoid using functions on columns in the WHERE clause (e.g. UPPER(status)) to preserve index SARGability.',
     },

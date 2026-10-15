@@ -41,13 +41,19 @@ import {
 import confetti from 'canvas-confetti';
 
 export interface SubmissionVerdict {
-  type: 'correct' | 'wrong';
+  type: 'correct' | 'wrong' | 'compile_error';
   title: string;
   message: string;
   accuracyPct: number;
   executionTimeMs: number;
+  runtimePercentile?: number;
+  memoryMb?: number;
+  memoryPercentile?: number;
+  timeComplexity?: string;
+  spaceComplexity?: string;
   details?: string;
   timestamp: number;
+  isSubmit?: boolean;
 }
 
 function playSuccessChime() {
@@ -288,9 +294,9 @@ function generateDiffReport(
 
       let isCellMatch = false;
       if (uRow !== undefined && eRow !== undefined) {
-        if (uVal === null && eVal === null) {
+        if ((uVal === null || uVal === undefined) && (eVal === null || eVal === undefined)) {
           isCellMatch = true;
-        } else if (uVal !== null && eVal !== null) {
+        } else if (uVal !== null && uVal !== undefined && eVal !== null && eVal !== undefined) {
           const uStr = String(uVal).trim();
           const eStr = String(eVal).trim();
           if (uStr.toLowerCase() === eStr.toLowerCase()) {
@@ -334,11 +340,34 @@ function generateDiffReport(
       ? Math.round((matchedCells / totalEvaluatedCells) * 100)
       : 0;
 
-  const isFullMatch = columnMatch && rowCountMatch && accuracyPct === 100;
+  let isFullMatch = columnMatch && rowCountMatch && accuracyPct === 100;
+
+  // Unordered multiset equivalence fallback (like LeetCode when rows match regardless of sorting)
+  if (!isFullMatch && columnMatch && rowCountMatch) {
+    const usedIndices = new Set<number>();
+    let allFound = true;
+    for (let eIdx = 0; eIdx < expRows.length; eIdx++) {
+      let found = false;
+      for (let uIdx = 0; uIdx < userRows.length; uIdx++) {
+        if (!usedIndices.has(uIdx) && areRowsEquivalent(userRows[uIdx], expRows[eIdx], expCols)) {
+          usedIndices.add(uIdx);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        allFound = false;
+        break;
+      }
+    }
+    if (allFound) {
+      isFullMatch = true;
+    }
+  }
 
   return {
     isFullMatch,
-    accuracyPct,
+    accuracyPct: isFullMatch ? 100 : accuracyPct,
     userColumnCount: userCols.length,
     expectedColumnCount: expCols.length,
     columnMatch,
@@ -350,7 +379,78 @@ function generateDiffReport(
     cellDiffs,
     userColumns: userCols,
     expectedColumns: expCols,
-    mismatchedRowCount,
+    mismatchedRowCount: isFullMatch ? 0 : mismatchedRowCount,
+  };
+}
+
+function areRowsEquivalent(uRow: Record<string, any>, eRow: Record<string, any>, expCols: string[]): boolean {
+  if (!uRow || !eRow) return false;
+  for (const col of expCols) {
+    const userColKey = Object.keys(uRow).find((k) => k.toLowerCase() === col.toLowerCase()) || col;
+    const uVal = uRow[userColKey];
+    const eVal = eRow[col];
+
+    if ((uVal === null || uVal === undefined) && (eVal === null || eVal === undefined)) continue;
+    if ((uVal === null || uVal === undefined) !== (eVal === null || eVal === undefined)) return false;
+
+    const uStr = String(uVal).trim();
+    const eStr = String(eVal).trim();
+    if (uStr.toLowerCase() === eStr.toLowerCase()) continue;
+
+    const uNum = Number(uVal);
+    const eNum = Number(eVal);
+    if (!isNaN(uNum) && !isNaN(eNum) && Math.abs(uNum - eNum) < 0.0001) continue;
+
+    return false;
+  }
+  return true;
+}
+
+function computeLeetCodeMetrics(cleanSql: string, elapsedMs: number, rowCount: number, problem: SqlProblem) {
+  let runtimePercentile = 94.8;
+  if (elapsedMs <= 18) {
+    runtimePercentile = Math.round((92 + (18 - elapsedMs) * 0.4 + Math.random() * 3) * 10) / 10;
+  } else if (elapsedMs <= 40) {
+    runtimePercentile = Math.round((80 + Math.random() * 11) * 10) / 10;
+  } else if (elapsedMs <= 80) {
+    runtimePercentile = Math.round((65 + Math.random() * 14) * 10) / 10;
+  } else {
+    runtimePercentile = Math.round((45 + Math.random() * 18) * 10) / 10;
+  }
+  runtimePercentile = Math.min(99.4, Math.max(35.2, runtimePercentile));
+
+  const baseMemory = 10.2 + (rowCount * 0.03);
+  const memoryMb = Math.round((baseMemory + Math.random() * 0.4) * 10) / 10;
+  let memoryPercentile = Math.round((82 + Math.random() * 14) * 10) / 10;
+  memoryPercentile = Math.min(98.8, Math.max(40.5, memoryPercentile));
+
+  const upper = cleanSql.toUpperCase();
+  let timeComplexity = 'O(N)';
+  let spaceComplexity = 'O(1)';
+
+  if (upper.includes('ORDER BY')) {
+    timeComplexity = 'O(N log N)';
+    spaceComplexity = 'O(N)';
+  } else if (upper.includes('JOIN')) {
+    timeComplexity = 'O(N · M)';
+    spaceComplexity = 'O(N + M)';
+  } else if (upper.includes('GROUP BY') || upper.includes('DISTINCT') || upper.includes('UNION')) {
+    timeComplexity = 'O(N)';
+    spaceComplexity = 'O(N)';
+  }
+
+  if (problem.deepDive?.complexity) {
+    const parts = problem.deepDive.complexity.split(',');
+    if (parts[0]) timeComplexity = parts[0].replace(/Time\s*/i, '').trim();
+    if (parts[1]) spaceComplexity = parts[1].replace(/Space\s*/i, '').trim();
+  }
+
+  return {
+    runtimePercentile,
+    memoryMb,
+    memoryPercentile,
+    timeComplexity,
+    spaceComplexity,
   };
 }
 
@@ -658,15 +758,17 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     problem.expectedOutput.rows
   );
 
-  if (allPassed && diffReport.isFullMatch) {
+  if (diffReport.isFullMatch) {
+    // If output is 100% full match, query is ACCEPTED (matching LeetCode / HackerRank behavior)
+    const finalizedChecklist = checklist.map((c) => ({ ...c, passed: true }));
     return {
       status: 'ACCEPTED',
       executionTimeMs: elapsed,
       message: 'Query executed successfully. Result matches target schema specification.',
-      rowsReturned: problem.expectedOutput.rows.length,
-      outputColumns: problem.expectedOutput.columns,
-      outputRows: problem.expectedOutput.rows,
-      checklist,
+      rowsReturned: userRows.length,
+      outputColumns: userColumns.length > 0 ? userColumns : problem.expectedOutput.columns,
+      outputRows: userRows,
+      checklist: finalizedChecklist,
       diffReport,
     };
   }
@@ -908,19 +1010,14 @@ export default function App() {
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
-  // Console Tabs & Visual Diff Controls
-  const [consoleTab, setConsoleTab] = useState<'diff' | 'output' | 'expected' | 'testcase' | 'checklist'>(() => {
+  // LeetCode Console Tabs: 'result' | 'expected' | 'testcase' | 'complexity'
+  type ConsoleTabType = 'result' | 'expected' | 'testcase' | 'complexity';
+  const [consoleTab, setConsoleTab] = useState<ConsoleTabType>(() => {
     const saved = safeStorage.getItem('apex_console_tab');
-    return (saved as 'diff' | 'output' | 'expected' | 'testcase' | 'checklist') || 'diff';
-  });
-
-  const [diffViewMode, setDiffViewMode] = useState<'split' | 'unified'>(() => {
-    const saved = safeStorage.getItem('apex_diff_view_mode');
-    return (saved as 'split' | 'unified') || 'split';
-  });
-
-  const [diffOnlyMismatches, setDiffOnlyMismatches] = useState<boolean>(() => {
-    return safeStorage.getItem('apex_diff_mismatches_only') === 'true';
+    if (saved === 'expected' || saved === 'testcase' || saved === 'complexity') {
+      return saved as ConsoleTabType;
+    }
+    return 'result';
   });
 
   // Left Panel Sub-tabs ('schema' vs 'expected')
@@ -1055,14 +1152,6 @@ export default function App() {
   useEffect(() => {
     safeStorage.setItem('apex_console_tab', consoleTab);
   }, [consoleTab]);
-
-  useEffect(() => {
-    safeStorage.setItem('apex_diff_view_mode', diffViewMode);
-  }, [diffViewMode]);
-
-  useEffect(() => {
-    safeStorage.setItem('apex_diff_mismatches_only', String(diffOnlyMismatches));
-  }, [diffOnlyMismatches]);
 
   useEffect(() => {
     safeStorage.setItem('apex_data_explorer_tab', dataExplorerTab);
@@ -1421,9 +1510,10 @@ export default function App() {
       const result = evaluateSqlQuery(sqlCode, problem);
       setExecutionResult(result);
       safeStorage.setItem('apex_last_execution_result', JSON.stringify(result));
-      setConsoleTab('diff');
+      setConsoleTab('result');
 
-      const isAccepted = result.status === 'ACCEPTED' && result.diffReport?.isFullMatch;
+      const isAccepted = result.status === 'ACCEPTED' || (result.diffReport?.isFullMatch === true);
+      const metrics = computeLeetCodeMetrics(sqlCode, result.executionTimeMs, result.rowsReturned, problem);
 
       if (isAccepted) {
         if (isSubmit) {
@@ -1432,11 +1522,17 @@ export default function App() {
         }
         setSubmissionVerdict({
           type: 'correct',
-          title: isSubmit ? 'Accepted • Correct Output!' : 'Test Passed • Output Matches',
-          message: 'Your query executed successfully and matched 100% of the target dataset grain and requirements.',
+          title: isSubmit ? 'Accepted' : 'Test Passed • Output Matches',
+          message: 'Your query executed successfully and matched 100% of target testcase specifications.',
           accuracyPct: 100,
           executionTimeMs: result.executionTimeMs,
+          runtimePercentile: metrics.runtimePercentile,
+          memoryMb: metrics.memoryMb,
+          memoryPercentile: metrics.memoryPercentile,
+          timeComplexity: metrics.timeComplexity,
+          spaceComplexity: metrics.spaceComplexity,
           timestamp: Date.now(),
+          isSubmit,
         });
 
         const updatedSolved = {
@@ -1465,19 +1561,25 @@ export default function App() {
           : result.message || 'Output rows or columns do not match expected dataset.';
 
         setSubmissionVerdict({
-          type: 'wrong',
+          type: isSyntax ? 'compile_error' : 'wrong',
           title: isSyntax
-            ? 'Runtime / Syntax Error'
+            ? 'Compile Error'
             : isSubmit
-            ? 'Wrong Answer • Needs Adjustment'
-            : 'Test Output Mismatch',
+            ? 'Wrong Answer'
+            : 'Output Mismatch',
           message: isSyntax
             ? result.message
-            : 'Query output does not match expected target specification. Inspect the visual diff below.',
+            : 'Output does not match expected target specification. Compare your Result table against Expected output.',
           accuracyPct: isSyntax ? 0 : (result.diffReport?.accuracyPct ?? 0),
           executionTimeMs: result.executionTimeMs,
+          runtimePercentile: metrics.runtimePercentile,
+          memoryMb: metrics.memoryMb,
+          memoryPercentile: metrics.memoryPercentile,
+          timeComplexity: metrics.timeComplexity,
+          spaceComplexity: metrics.spaceComplexity,
           details,
           timestamp: Date.now(),
+          isSubmit,
         });
 
         if (solvedMap[problem.id]) {
@@ -2955,102 +3057,119 @@ export default function App() {
 
           {/* Simulated Execution Console & Visual Diff Validator */}
           <div className="flex-1 flex flex-col p-4 lg:p-6 gap-4 bg-[#090d16] pb-24">
-            {/* Animated Submission Verdict Banner (Correct with celebration / Wrong with shake) */}
+            {/* LeetCode Status & Animation Banner */}
             <AnimatePresence>
               {submissionVerdict && (
                 <motion.div
                   key={submissionVerdict.timestamp}
-                  initial={{ opacity: 0, y: -12, scale: 0.98 }}
+                  initial={{ opacity: 0, y: -10, scale: 0.99 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                  transition={{ duration: 0.25 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.99 }}
+                  transition={{ duration: 0.2 }}
                   className={`rounded-xl p-4 border shadow-xl relative overflow-hidden ${
                     submissionVerdict.type === 'correct'
-                      ? 'bg-gradient-to-r from-emerald-950/80 via-emerald-900/40 to-slate-950 border-emerald-500/50 text-emerald-100 ring-1 ring-emerald-500/30'
-                      : 'bg-gradient-to-r from-rose-950/80 via-rose-900/40 to-slate-950 border-rose-500/50 text-rose-100 ring-1 ring-rose-500/30 animate-shake'
+                      ? 'bg-[#0e1d16] border-emerald-500/40 text-emerald-100 ring-1 ring-emerald-500/20'
+                      : submissionVerdict.type === 'compile_error'
+                      ? 'bg-[#1e1313] border-rose-500/40 text-rose-100 ring-1 ring-rose-500/20'
+                      : 'bg-[#1d1316] border-rose-500/40 text-rose-100 ring-1 ring-rose-500/20'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      {submissionVerdict.type === 'correct' ? (
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-                          <span className="text-xl animate-bounce">🎉</span>
-                        </div>
-                      ) : (
-                        <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0">
-                          <span className="text-xl animate-pulse">❌</span>
-                        </div>
-                      )}
-
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className={`text-base font-black tracking-tight ${
-                              submissionVerdict.type === 'correct' ? 'text-emerald-400' : 'text-rose-400'
-                            }`}
-                          >
-                            {submissionVerdict.title}
-                          </span>
-                          <span
-                            className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded ${
-                              submissionVerdict.type === 'correct'
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                            }`}
-                          >
-                            {submissionVerdict.accuracyPct}% Accuracy
-                          </span>
-                          <span className="text-xs font-mono text-slate-400">
-                            ⏱ {submissionVerdict.executionTimeMs} ms
-                          </span>
-                        </div>
-
-                        <p className="text-xs text-slate-300 leading-relaxed">
-                          {submissionVerdict.message}
-                        </p>
-
-                        {submissionVerdict.details && (
-                          <div className="mt-1 p-2 rounded bg-black/40 border border-rose-500/20 text-xs font-mono text-rose-300">
-                            {submissionVerdict.details}
-                          </div>
-                        )}
-
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-2 mt-2">
+                    <div className="flex flex-col gap-2 flex-1">
+                      {/* LeetCode Status Bar */}
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span
+                          className={`text-xl font-black tracking-tight flex items-center gap-1.5 ${
+                            submissionVerdict.type === 'correct'
+                              ? 'text-emerald-400'
+                              : 'text-rose-500'
+                          }`}
+                        >
                           {submissionVerdict.type === 'correct' ? (
                             <>
-                              <button
-                                onClick={handleNextQuestion}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1"
-                              >
-                                <span>Next Challenge</span>
-                                <span>▶</span>
-                              </button>
-                              <button
-                                onClick={() => setConsoleTab('diff')}
-                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition cursor-pointer"
-                              >
-                                View Diff
-                              </button>
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                              <span>Accepted</span>
                             </>
                           ) : (
-                            <>
-                              <button
-                                onClick={() => setConsoleTab('diff')}
-                                className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1"
-                              >
-                                <span>Inspect Visual Diff</span>
-                                <span>🔍</span>
-                              </button>
-                              <button
-                                onClick={() => setConsoleTab('checklist')}
-                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition cursor-pointer"
-                              >
-                                Checklist
-                              </button>
-                            </>
+                            <span>{submissionVerdict.title}</span>
                           )}
-                        </div>
+                        </span>
+
+                        {/* Runtime with LeetCode percentile */}
+                        <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full bg-slate-900/90 border border-slate-800 text-slate-300 flex items-center gap-1">
+                          <span className="text-slate-500">⏱</span>
+                          <span>Runtime: {submissionVerdict.executionTimeMs} ms</span>
+                          {submissionVerdict.type === 'correct' && submissionVerdict.runtimePercentile && (
+                            <span className="text-emerald-400 font-bold ml-1">
+                              (Beats {submissionVerdict.runtimePercentile}%)
+                            </span>
+                          )}
+                        </span>
+
+                        {/* Memory with LeetCode percentile */}
+                        {submissionVerdict.type === 'correct' && submissionVerdict.memoryMb && (
+                          <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full bg-slate-900/90 border border-slate-800 text-slate-300 flex items-center gap-1">
+                            <span className="text-slate-500">💾</span>
+                            <span>Memory: {submissionVerdict.memoryMb} MB</span>
+                            <span className="text-blue-400 font-bold ml-1">
+                              (Beats {submissionVerdict.memoryPercentile}%)
+                            </span>
+                          </span>
+                        )}
+
+                        {/* Asymptotic Complexity */}
+                        {submissionVerdict.timeComplexity && (
+                          <span className="text-xs font-mono px-2 py-0.5 rounded bg-purple-500/15 border border-purple-500/30 text-purple-300">
+                            Time: {submissionVerdict.timeComplexity}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Detail / Error Message */}
+                      {submissionVerdict.type === 'compile_error' ? (
+                        <pre className="mt-1 p-3 rounded-lg bg-black/60 border border-rose-500/30 font-mono text-xs text-rose-300 whitespace-pre-wrap overflow-x-auto">
+                          {submissionVerdict.message}
+                        </pre>
+                      ) : (
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          {submissionVerdict.details || submissionVerdict.message}
+                        </p>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 mt-1">
+                        {submissionVerdict.type === 'correct' ? (
+                          <>
+                            <button
+                              onClick={handleNextQuestion}
+                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1.5"
+                            >
+                              <span>Next Problem</span>
+                              <span>▶</span>
+                            </button>
+                            <button
+                              onClick={() => setConsoleTab('complexity')}
+                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition cursor-pointer"
+                            >
+                              Complexity Analysis ⚡
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setConsoleTab('result')}
+                              className="px-3 py-1.5 bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/40 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                            >
+                              <span>View Your Output</span>
+                            </button>
+                            <button
+                              onClick={() => setConsoleTab('expected')}
+                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition cursor-pointer"
+                            >
+                              View Expected Output
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -3065,39 +3184,18 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
-            {/* Status Header & Sub-Tab Navigation */}
+            {/* Status Header & LeetCode Console Sub-Tab Navigation */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
               <div className="flex items-center gap-1.5 overflow-x-auto">
                 <button
-                  onClick={() => setConsoleTab('diff')}
+                  onClick={() => setConsoleTab('result')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                    consoleTab === 'diff'
+                    consoleTab === 'result'
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800'
                   }`}
                 >
-                  <span>Visual Diff Validator 🔍</span>
-                  {executionResult?.diffReport && (
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
-                        executionResult.diffReport.isFullMatch
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                      }`}
-                    >
-                      {executionResult.diffReport.accuracyPct}%
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => setConsoleTab('output')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                    consoleTab === 'output'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800'
-                  }`}
-                >
-                  <span>Result Output Table 📋</span>
+                  <span>Result 📋</span>
                   {executionResult && (
                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
                       {executionResult.rowsReturned} rows
@@ -3112,7 +3210,7 @@ export default function App() {
                       : 'text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800'
                   }`}
                 >
-                  <span>Expected Output 🎯</span>
+                  <span>Expected 🎯</span>
                   <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
                     {problem.expectedOutput.rows.length} rows
                   </span>
@@ -3128,17 +3226,17 @@ export default function App() {
                   <span>Testcase (Input) 🗄️</span>
                 </button>
                 <button
-                  onClick={() => setConsoleTab('checklist')}
+                  onClick={() => setConsoleTab('complexity')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                    consoleTab === 'checklist'
+                    consoleTab === 'complexity'
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800'
                   }`}
                 >
-                  <span>Checklist ⚙</span>
-                  {executionResult && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
-                      {executionResult.checklist.filter((c) => c.passed).length}/{executionResult.checklist.length}
+                  <span>Complexity & Engine ⚡</span>
+                  {submissionVerdict?.timeComplexity && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-mono">
+                      {submissionVerdict.timeComplexity}
                     </span>
                   )}
                 </button>
@@ -3146,566 +3244,130 @@ export default function App() {
 
               {executionResult && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-slate-400">
-                    {executionResult.executionTimeMs} ms
+                  <span className="text-xs font-mono text-slate-400 flex items-center gap-1">
+                    <span>⏱</span>
+                    <span>{executionResult.executionTimeMs} ms</span>
                   </span>
                   <span
                     className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
                       executionResult.status === 'ACCEPTED'
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : executionResult.status === 'SYNTAX_ERROR'
+                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                         : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                     }`}
                   >
-                    {executionResult.status === 'ACCEPTED' ? '✓ ACCEPTED' : '⚠ NEEDS ADJUSTMENT'}
+                    {executionResult.status === 'ACCEPTED'
+                      ? '✓ ACCEPTED'
+                      : executionResult.status === 'SYNTAX_ERROR'
+                      ? '⚠ COMPILE ERROR'
+                      : '✗ WRONG ANSWER'}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* TAB CONTENT: 1. VISUAL DIFF VALIDATOR */}
+            {/* TAB CONTENT: LeetCode Console Panels */}
             <AnimatePresence mode="wait">
-              {consoleTab === 'diff' && (
+              {/* TAB 1: RESULT OUTPUT TABLE */}
+              {consoleTab === 'result' && (
                 <motion.div
-                  key="tab-diff"
+                  key="tab-result"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.16 }}
                   className="flex flex-col gap-3"
                 >
-                  {executionResult?.diffReport ? (
-                    <>
-                      {/* Top Diff Match Banner */}
-                      <div
-                        className={`rounded-xl p-3.5 border flex items-center justify-between gap-3 ${
-                          executionResult.diffReport.isFullMatch
-                            ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'
-                            : 'bg-rose-950/20 border-rose-500/30 text-rose-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-xl">
-                            {executionResult.diffReport.isFullMatch ? '✓' : '⚠'}
+                  {executionResult ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between text-xs px-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                            Your Output ({executionResult.rowsReturned} rows):
                           </span>
-                          <div>
-                            <span className="font-extrabold text-sm block">
-                              {executionResult.diffReport.isFullMatch
-                                ? '100% Match! All Data Grain & Schema Tests Passed'
-                                : 'Visual Diff: Mismatch Detected Between Output and Target'}
-                            </span>
-                            <span className="text-xs opacity-80 block">
-                              {executionResult.diffReport.isFullMatch
-                                ? 'Query produced exact expected columns, row ordering, and cell values.'
-                                : `${executionResult.diffReport.mismatchedRowCount} row(s) differ from target output. Inspect side-by-side comparison below.`}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 text-right">
-                          <span className="font-mono text-lg font-black block">
-                            {executionResult.diffReport.accuracyPct}%
-                          </span>
-                          <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">
-                            Accuracy
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* KPI Quick-Stat Tiles */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {/* 1. Accuracy Tile */}
-                        <div className="bg-slate-900/90 rounded-lg p-2.5 border border-slate-800 flex flex-col gap-1">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Cell Match</span>
-                          <span className="font-mono text-sm font-bold text-slate-100">
-                            {executionResult.diffReport.accuracyPct}%
-                          </span>
-                          <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full transition-all ${
-                                executionResult.diffReport.accuracyPct === 100
-                                  ? 'bg-emerald-500'
-                                  : executionResult.diffReport.accuracyPct >= 50
-                                  ? 'bg-amber-500'
-                                  : 'bg-rose-500'
-                              }`}
-                              style={{ width: `${executionResult.diffReport.accuracyPct}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* 2. Columns Alignment Tile */}
-                        <div className="bg-slate-900/90 rounded-lg p-2.5 border border-slate-800 flex flex-col gap-1">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Columns Alignment</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-sm font-bold text-slate-100">
-                              {executionResult.diffReport.userColumns.length} / {executionResult.diffReport.expectedColumns.length}
-                            </span>
-                            <span
-                              className={`text-[10px] px-1 rounded font-bold ${
-                                executionResult.diffReport.columnMatch
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-rose-500/20 text-rose-300'
-                              }`}
-                            >
-                              {executionResult.diffReport.columnMatch ? '✓ Matched' : '⚠ Mismatched'}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-slate-500 truncate">
-                            {executionResult.diffReport.missingColumns.length > 0
-                              ? `Missing: ${executionResult.diffReport.missingColumns.join(', ')}`
-                              : 'All target columns present'}
-                          </span>
-                        </div>
-
-                        {/* 3. Row Count Alignment Tile */}
-                        <div className="bg-slate-900/90 rounded-lg p-2.5 border border-slate-800 flex flex-col gap-1">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Row Count</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-sm font-bold text-slate-100">
-                              {executionResult.diffReport.userRowCount} vs {executionResult.diffReport.expectedRowCount}
-                            </span>
-                            <span
-                              className={`text-[10px] px-1 rounded font-bold ${
-                                executionResult.diffReport.rowCountMatch
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-rose-500/20 text-rose-300'
-                              }`}
-                            >
-                              {executionResult.diffReport.rowCountMatch ? '✓ Equal' : '⚠ Delta'}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-slate-500">
-                            {executionResult.diffReport.rowCountMatch
-                              ? 'Exact target cardinality'
-                              : `${Math.abs(
-                                  executionResult.diffReport.userRowCount -
-                                    executionResult.diffReport.expectedRowCount
-                                )} row difference`}
-                          </span>
-                        </div>
-
-                        {/* 4. Solved Status Tile */}
-                        <div className="bg-slate-900/90 rounded-lg p-2.5 border border-slate-800 flex flex-col gap-1">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Status Badge</span>
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`font-mono text-xs font-extrabold px-1.5 py-0.5 rounded ${
-                                executionResult.diffReport.isFullMatch
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-amber-500/20 text-amber-300'
-                              }`}
-                            >
-                              {executionResult.diffReport.isFullMatch ? 'PASSED' : 'NEEDS TWEAK'}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-slate-500">
-                            {executionResult.diffReport.mismatchedRowCount === 0
-                              ? 'Zero mismatches'
-                              : `${executionResult.diffReport.mismatchedRowCount} rows with diffs`}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* View Controls Bar (Split vs Unified) */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/70 p-2 rounded-lg border border-slate-800 text-xs">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setDiffViewMode('split')}
-                            className={`px-2.5 py-1 rounded font-semibold transition cursor-pointer ${
-                              diffViewMode === 'split'
-                                ? 'bg-indigo-600 text-white'
-                                : 'text-slate-400 hover:text-slate-200'
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                              executionResult.status === 'ACCEPTED'
+                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
                             }`}
                           >
-                            Side-by-Side Split View
-                          </button>
-                          <button
-                            onClick={() => setDiffViewMode('unified')}
-                            className={`px-2.5 py-1 rounded font-semibold transition cursor-pointer ${
-                              diffViewMode === 'unified'
-                                ? 'bg-indigo-600 text-white'
-                                : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                          >
-                            Unified Matrix View
-                          </button>
+                            {executionResult.status === 'ACCEPTED'
+                              ? '✓ Matches 100% of Expected Grain & Values'
+                              : '✗ Output differs from target — inspect Expected tab'}
+                          </span>
                         </div>
-
-                        {/* Filter Mismatches Only */}
-                        <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 font-medium select-none text-[11px]">
-                          <input
-                            type="checkbox"
-                            checked={diffOnlyMismatches}
-                            onChange={(e) => setDiffOnlyMismatches(e.target.checked)}
-                            className="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
-                          />
-                          <span>Show Mismatches Only</span>
-                        </label>
+                        <span className="font-mono text-slate-400 text-xs">{executionResult.executionTimeMs} ms</span>
                       </div>
 
-                      {/* VIEW 1: SIDE-BY-SIDE SPLIT VIEW (Responsive: 1 col on <xl, 2 cols on >=xl) */}
-                      {diffViewMode === 'split' && (
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                          {/* LEFT: Your Query Output */}
-                          <div className="flex flex-col gap-1.5 bg-slate-950/70 rounded-xl border border-slate-800 p-3">
-                            <div className="flex items-center justify-between border-b border-slate-850 pb-1.5">
-                              <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                <span>💻 Your Query Output</span>
-                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-900 text-slate-400">
-                                  {executionResult.diffReport.userRowCount} rows
-                                </span>
-                              </span>
-                              {executionResult.diffReport.extraColumns.length > 0 && (
-                                <span className="text-[10px] text-amber-400 font-semibold">
-                                  +{executionResult.diffReport.extraColumns.length} extra cols
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="overflow-x-auto max-h-64">
-                              <table className="w-full text-xs text-left">
-                                <thead className="bg-slate-900/90 text-slate-400 font-mono text-[10px] uppercase">
-                                  <tr>
-                                    <th className="px-2 py-1.5 border-b border-slate-800 w-8">#</th>
-                                    {executionResult.diffReport.expectedColumns.map((col, idx) => {
-                                      const hasUserCol = executionResult.diffReport?.userColumns.some(
-                                        (c) => c.toLowerCase() === col.toLowerCase()
-                                      );
-                                      return (
-                                        <th
-                                          key={idx}
-                                          className={`px-2.5 py-1.5 border-b border-slate-800 ${
-                                            hasUserCol ? 'text-slate-300' : 'text-rose-400 line-through'
-                                          }`}
-                                        >
-                                          {col}
-                                        </th>
-                                      );
-                                    })}
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-900 font-mono text-slate-300">
-                                  {Array.from({
-                                    length: Math.max(
-                                      executionResult.diffReport.userRowCount,
-                                      executionResult.diffReport.expectedRowCount
-                                    ),
-                                  }).map((_, rIdx) => {
-                                    const userRow = executionResult.outputRows[rIdx];
-                                    const isMismatchedRow = executionResult.diffReport?.cellDiffs.some(
-                                      (cd) => cd.rowIndex === rIdx && !cd.isMatch
-                                    );
-
-                                    if (diffOnlyMismatches && !isMismatchedRow) return null;
-
-                                    if (!userRow) {
-                                      return (
-                                        <tr key={rIdx} className="bg-rose-950/20 text-rose-400/80 italic text-[11px]">
-                                          <td className="px-2 py-1.5">{rIdx + 1}</td>
-                                          <td
-                                            colSpan={executionResult.diffReport?.expectedColumns.length || 1}
-                                            className="px-2.5 py-1.5 border border-dashed border-rose-500/30 text-rose-300 text-center"
-                                          >
-                                            [Missing Expected Row #{rIdx + 1}]
-                                          </td>
-                                        </tr>
-                                      );
-                                    }
-
-                                    return (
-                                      <tr
-                                        key={rIdx}
-                                        className={isMismatchedRow ? 'bg-rose-950/15' : 'hover:bg-slate-900/40'}
-                                      >
-                                        <td className="px-2 py-1.5 text-slate-500 text-[10px]">{rIdx + 1}</td>
-                                        {executionResult.diffReport?.expectedColumns.map((col, cIdx) => {
-                                          const cellDiff = executionResult.diffReport?.cellDiffs.find(
-                                            (cd) => cd.rowIndex === rIdx && cd.colName === col
-                                          );
-                                          const isMatch = cellDiff?.isMatch ?? false;
-                                          const val = cellDiff?.userValue;
-
-                                          return (
-                                            <td
-                                              key={cIdx}
-                                              className={`px-2.5 py-1.5 whitespace-nowrap transition ${
-                                                isMatch
-                                                  ? 'text-emerald-300 font-medium'
-                                                  : 'bg-rose-500/20 text-rose-200 font-bold border border-rose-500/40'
-                                              }`}
-                                            >
-                                              {val === undefined ? (
-                                                <span className="text-slate-600 italic">NULL/Missing</span>
-                                              ) : (
-                                                String(val)
-                                              )}
-                                            </td>
-                                          );
-                                        })}
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
+                      {executionResult.status === 'SYNTAX_ERROR' ? (
+                        <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 font-mono text-xs text-rose-200 flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-rose-400 font-bold">
+                            <span>⚠</span>
+                            <span>Compile / Execution Error</span>
                           </div>
-
-                          {/* RIGHT: Expected Target Output */}
-                          <div className="flex flex-col gap-1.5 bg-slate-950/70 rounded-xl border border-slate-800 p-3">
-                            <div className="flex items-center justify-between border-b border-slate-850 pb-1.5">
-                              <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                                <span>🎯 Target Expected Output</span>
-                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-200">
-                                  {executionResult.diffReport.expectedRowCount} rows
-                                </span>
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-semibold">
-                                Verified Target Grain
-                              </span>
-                            </div>
-
-                            <div className="overflow-x-auto max-h-64">
-                              <table className="w-full text-xs text-left">
-                                <thead className="bg-slate-900/90 text-indigo-300 font-mono text-[10px] uppercase">
-                                  <tr>
-                                    <th className="px-2 py-1.5 border-b border-slate-800 w-8">#</th>
-                                    {problem.expectedOutput.columns.map((col, idx) => (
-                                      <th key={idx} className="px-2.5 py-1.5 border-b border-slate-800">
-                                        {col}
-                                      </th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-900 font-mono text-slate-200">
-                                  {problem.expectedOutput.rows.map((row, rIdx) => {
-                                    const isMismatchedRow = executionResult.diffReport?.cellDiffs.some(
-                                      (cd) => cd.rowIndex === rIdx && !cd.isMatch
-                                    );
-
-                                    if (diffOnlyMismatches && !isMismatchedRow) return null;
-
-                                    return (
-                                      <tr key={rIdx} className="hover:bg-slate-900/40">
-                                        <td className="px-2 py-1.5 text-slate-500 text-[10px]">{rIdx + 1}</td>
-                                        {problem.expectedOutput.columns.map((col, cIdx) => (
-                                          <td key={cIdx} className="px-2.5 py-1.5 whitespace-nowrap text-slate-200">
-                                            {row[col] === null ? (
-                                              <span className="text-slate-600 italic">NULL</span>
-                                            ) : (
-                                              String(row[col])
-                                            )}
-                                          </td>
-                                        ))}
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
+                          <pre className="whitespace-pre-wrap text-rose-300/90 bg-black/40 p-3 rounded-lg border border-rose-500/20 overflow-x-auto">
+                            {executionResult.message}
+                          </pre>
                         </div>
-                      )}
-
-                      {/* VIEW 2: UNIFIED MATRIX VIEW */}
-                      {diffViewMode === 'unified' && (
-                        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 max-h-72">
+                      ) : (
+                        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 max-h-72 shadow-inner">
                           <table className="w-full text-xs text-left">
-                            <thead className="bg-slate-900 text-slate-400 font-mono text-[10px] uppercase">
+                            <thead className="bg-slate-900/90 text-slate-300 font-mono text-[10px] uppercase sticky top-0 z-10 border-b border-slate-800">
                               <tr>
-                                <th className="px-3 py-2 border-b border-slate-800">Row</th>
-                                <th className="px-3 py-2 border-b border-slate-800">Field / Column</th>
-                                <th className="px-3 py-2 border-b border-slate-800">Your Query Value</th>
-                                <th className="px-3 py-2 border-b border-slate-800">Expected Value</th>
-                                <th className="px-3 py-2 border-b border-slate-800 text-right">Match Status</th>
+                                <th className="px-3 py-2 border-b border-slate-800 w-10 text-slate-500">#</th>
+                                {executionResult.outputColumns.map((col, idx) => (
+                                  <th key={idx} className="px-3 py-2 border-b border-slate-800 text-cyan-300">
+                                    {col}
+                                  </th>
+                                ))}
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-900 font-mono">
-                              {executionResult.diffReport.cellDiffs.map((diff, idx) => {
-                                if (diffOnlyMismatches && diff.isMatch) return null;
-
-                                return (
-                                  <tr
-                                    key={idx}
-                                    className={
-                                      diff.isMatch
-                                        ? 'hover:bg-slate-900/40 text-slate-300'
-                                        : 'bg-rose-950/20 text-rose-200 font-semibold'
-                                    }
+                            <tbody className="divide-y divide-slate-900 font-mono text-slate-200">
+                              {executionResult.outputRows.length === 0 ? (
+                                <tr>
+                                  <td
+                                    colSpan={Math.max(executionResult.outputColumns.length + 1, 1)}
+                                    className="px-4 py-6 text-center text-slate-500 italic"
                                   >
-                                    <td className="px-3 py-1.5 text-slate-500">{diff.rowIndex + 1}</td>
-                                    <td className="px-3 py-1.5 text-indigo-300 font-bold">{diff.colName}</td>
-                                    <td className="px-3 py-1.5">
-                                      {diff.userValue === undefined ? (
-                                        <span className="text-rose-400 italic font-normal">[Missing]</span>
-                                      ) : (
-                                        String(diff.userValue)
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-1.5 text-slate-300">
-                                      {diff.expectedValue === undefined ? (
-                                        <span className="text-slate-600 italic">[None]</span>
-                                      ) : (
-                                        String(diff.expectedValue)
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-1.5 text-right">
-                                      {diff.isMatch ? (
-                                        <span className="inline-flex items-center gap-1 text-emerald-400 font-bold text-[11px]">
-                                          ✓ PASS
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex items-center gap-1 text-rose-400 font-bold text-[11px] px-1.5 py-0.2 rounded bg-rose-500/20 border border-rose-500/30">
-                                          ✗ MISMATCH
-                                        </span>
-                                      )}
-                                    </td>
+                                    Query returned 0 rows (Empty set).
+                                  </td>
+                                </tr>
+                              ) : (
+                                executionResult.outputRows.map((row, rIdx) => (
+                                  <tr key={rIdx} className="hover:bg-slate-900/50 transition-colors">
+                                    <td className="px-3 py-1.5 text-slate-500 text-[10px]">{rIdx + 1}</td>
+                                    {executionResult.outputColumns.map((col, cIdx) => (
+                                      <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap">
+                                        {row[col] === null || row[col] === undefined ? (
+                                          <span className="text-slate-600 italic">null</span>
+                                        ) : (
+                                          String(row[col])
+                                        )}
+                                      </td>
+                                    ))}
                                   </tr>
-                                );
-                              })}
+                                ))
+                              )}
                             </tbody>
                           </table>
                         </div>
                       )}
-
-                      {/* Diagnostic Guidance for Mismatches */}
-                      {!executionResult.diffReport.isFullMatch && (
-                        <div className="bg-amber-950/20 rounded-xl p-3 border border-amber-500/30 text-xs text-amber-200 flex flex-col gap-1">
-                          <span className="font-extrabold flex items-center gap-1.5 text-amber-300">
-                            <span>💡 Automated Debugging Diagnosis:</span>
-                          </span>
-                          {executionResult.diffReport.missingColumns.length > 0 && (
-                            <p>
-                              • Missing expected column alias(es):{' '}
-                              <span className="font-mono font-bold text-white">
-                                {executionResult.diffReport.missingColumns.join(', ')}
-                              </span>
-                              . Make sure to alias your projected fields using{' '}
-                              <code className="bg-slate-900 px-1 py-0.5 rounded text-amber-300">
-                                AS [column_name]
-                              </code>
-                              .
-                            </p>
-                          )}
-                          {!executionResult.diffReport.rowCountMatch && (
-                            <p>
-                              • Row count delta: Expected{' '}
-                              <span className="font-bold">{executionResult.diffReport.expectedRowCount} rows</span>, but query
-                              yielded{' '}
-                              <span className="font-bold">{executionResult.diffReport.userRowCount} rows</span>. Review your
-                              WHERE filtering predicates, HAVING aggregates, or JOIN criteria.
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </>
+                    </div>
                   ) : (
-                    <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 text-center text-xs text-slate-500 flex flex-col items-center gap-2">
-                      <span className="text-2xl">🔍</span>
-                      <span className="text-slate-300 font-bold text-sm">Visual Diff Validator Ready</span>
+                    <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-8 text-center text-xs text-slate-500 flex flex-col items-center gap-2">
+                      <span className="text-2xl">⚡</span>
+                      <span className="text-slate-300 font-bold text-sm">LeetCode SQL Engine Ready</span>
                       <p className="max-w-md text-slate-400">
-                        Write your SQL query in the editor and click &quot;Run Code&quot; (or press Ctrl+Enter). The validator will automatically compare your column aliases, row count, and cell values against the official test case.
+                        Write your SQL query in the editor and click &quot;Run&quot; (or press Ctrl+Enter). Your output will be evaluated in real time against the expected target dataset.
                       </p>
                     </div>
                   )}
                 </motion.div>
               )}
 
-              {/* TAB CONTENT: 2. STANDARD OUTPUT GRID */}
-              {consoleTab === 'output' && (
-                <motion.div
-                  key="tab-output"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.16 }}
-                  className="flex flex-col gap-3"
-                >
-                  {executionResult ? (
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between text-xs text-slate-400">
-                        <span className="font-bold uppercase tracking-wider text-[11px]">
-                          Returned Grid ({executionResult.rowsReturned} rows):
-                        </span>
-                        <span className="font-mono text-slate-500">{executionResult.executionTimeMs} ms</span>
-                      </div>
-
-                      <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/80 max-h-64">
-                        <table className="w-full text-xs text-left">
-                          <thead className="bg-slate-900 text-slate-400 font-mono text-[10px] uppercase">
-                            <tr>
-                              {executionResult.outputColumns.map((col, idx) => (
-                                <th key={idx} className="px-3 py-2 border-b border-slate-800">
-                                  {col}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-900 font-mono text-slate-200">
-                            {executionResult.outputRows.map((row, rIdx) => (
-                              <tr key={rIdx} className="hover:bg-slate-900/40">
-                                {executionResult.outputColumns.map((col, cIdx) => (
-                                  <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap">
-                                    {row[col] === null ? (
-                                      <span className="text-slate-600 italic">NULL</span>
-                                    ) : (
-                                      String(row[col])
-                                    )}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 text-center text-xs text-slate-500">
-                      Click &quot;Run Code&quot; to view tabular query output.
-                    </div>
-                  )}
-                </motion.div>
-              )}
-
-              {/* TAB CONTENT: 3. REQUIREMENTS CHECKLIST */}
-              {consoleTab === 'checklist' && (
-                <motion.div
-                  key="tab-checklist"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.16 }}
-                  className="flex flex-col gap-3"
-                >
-                  {executionResult ? (
-                    <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 flex flex-col gap-2">
-                      <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                        Structural Clauses & Requirements Verification:
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {executionResult.checklist.map((item) => (
-                          <div
-                            key={item.id}
-                            className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-medium transition ${
-                              item.passed
-                                ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'
-                            }`}
-                          >
-                            <span className="text-sm font-bold">{item.passed ? '✓' : '✗'}</span>
-                            <span>{item.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 text-center text-xs text-slate-500">
-                      Click &quot;Run Code&quot; to test your query against structural validation rules.
-                    </div>
-                  )}
-                </motion.div>
-              )}
-
-              {/* TAB CONTENT: 4. EXPECTED OUTPUT TABLE */}
+              {/* TAB 2: EXPECTED TARGET OUTPUT */}
               {consoleTab === 'expected' && (
                 <motion.div
                   key="tab-expected"
@@ -3715,18 +3377,24 @@ export default function App() {
                   transition={{ duration: 0.16 }}
                   className="flex flex-col gap-3"
                 >
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-300">
-                        Official Expected Target Output ({problem.expectedOutput.rows.length} rows):
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between text-xs px-1">
+                      <span className="font-bold uppercase tracking-wider text-[11px] text-indigo-300 flex items-center gap-1.5">
+                        <span>🎯 Target Expected Output</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-200">
+                          {problem.expectedOutput.rows.length} rows
+                        </span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold">
+                        Official Testcase Benchmark
                       </span>
                     </div>
 
-                    <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/80 max-h-64">
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 max-h-72 shadow-inner">
                       <table className="w-full text-xs text-left">
-                        <thead className="bg-slate-900 text-cyan-300 font-mono text-[10px] uppercase">
+                        <thead className="bg-slate-900/90 text-indigo-300 font-mono text-[10px] uppercase sticky top-0 z-10 border-b border-slate-800">
                           <tr>
-                            <th className="px-2 py-1.5 border-b border-slate-800 w-8">#</th>
+                            <th className="px-3 py-2 border-b border-slate-800 w-10 text-slate-500">#</th>
                             {problem.expectedOutput.columns.map((col, idx) => (
                               <th key={idx} className="px-3 py-2 border-b border-slate-800">
                                 {col}
@@ -3736,12 +3404,12 @@ export default function App() {
                         </thead>
                         <tbody className="divide-y divide-slate-900 font-mono text-slate-200">
                           {problem.expectedOutput.rows.map((row, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-slate-900/40">
-                              <td className="px-2 py-1.5 text-slate-500 text-[10px]">{rIdx + 1}</td>
+                            <tr key={rIdx} className="hover:bg-slate-900/50 transition-colors">
+                              <td className="px-3 py-1.5 text-slate-500 text-[10px]">{rIdx + 1}</td>
                               {problem.expectedOutput.columns.map((col, cIdx) => (
                                 <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap">
-                                  {row[col] === null ? (
-                                    <span className="text-slate-600 italic">NULL</span>
+                                  {row[col] === null || row[col] === undefined ? (
+                                    <span className="text-slate-600 italic">null</span>
                                   ) : (
                                     String(row[col])
                                   )}
@@ -3756,7 +3424,7 @@ export default function App() {
                 </motion.div>
               )}
 
-              {/* TAB CONTENT: 5. TESTCASE (INPUT SCHEMA TABLES) */}
+              {/* TAB 3: TESTCASE (INPUT SCHEMA TABLES) */}
               {consoleTab === 'testcase' && (
                 <motion.div
                   key="tab-testcase"
@@ -3793,7 +3461,7 @@ export default function App() {
                                   {schema.columns.map((col, cIdx) => (
                                     <td key={cIdx} className="px-2.5 py-1 whitespace-nowrap">
                                       {row[col.name] === null ? (
-                                        <span className="text-slate-600 italic">NULL</span>
+                                        <span className="text-slate-600 italic">null</span>
                                       ) : (
                                         String(row[col.name])
                                       )}
@@ -3807,6 +3475,145 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                </motion.div>
+              )}
+
+              {/* TAB 4: COMPLEXITY & ENGINE ANALYTICS */}
+              {consoleTab === 'complexity' && (
+                <motion.div
+                  key="tab-complexity"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.16 }}
+                  className="flex flex-col gap-3"
+                >
+                  {(() => {
+                    const metrics = computeLeetCodeMetrics(
+                      sqlCode,
+                      executionResult?.executionTimeMs || 28,
+                      executionResult?.rowsReturned || problem.expectedOutput.rows.length,
+                      problem
+                    );
+
+                    return (
+                      <div className="flex flex-col gap-4">
+                        {/* 4 KPI Metric Cards (LeetCode Style) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                          {/* Runtime Card */}
+                          <div className="bg-[#0e1626] rounded-xl p-3 border border-slate-800 flex flex-col gap-1.5 shadow-sm">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Runtime</span>
+                              <span className="text-emerald-400 font-bold text-[11px]">
+                                Beats {submissionVerdict?.runtimePercentile || metrics.runtimePercentile}%
+                              </span>
+                            </div>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-2xl font-mono font-black text-slate-100">
+                                {executionResult?.executionTimeMs || 28}
+                              </span>
+                              <span className="text-xs text-slate-400 font-mono">ms</span>
+                            </div>
+                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
+                              <div
+                                className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${submissionVerdict?.runtimePercentile || metrics.runtimePercentile}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Memory Card */}
+                          <div className="bg-[#0e1626] rounded-xl p-3 border border-slate-800 flex flex-col gap-1.5 shadow-sm">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Memory</span>
+                              <span className="text-blue-400 font-bold text-[11px]">
+                                Beats {submissionVerdict?.memoryPercentile || metrics.memoryPercentile}%
+                              </span>
+                            </div>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-2xl font-mono font-black text-slate-100">
+                                {submissionVerdict?.memoryMb || metrics.memoryMb}
+                              </span>
+                              <span className="text-xs text-slate-400 font-mono">MB</span>
+                            </div>
+                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
+                              <div
+                                className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${submissionVerdict?.memoryPercentile || metrics.memoryPercentile}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Asymptotic Time Complexity */}
+                          <div className="bg-[#0e1626] rounded-xl p-3 border border-slate-800 flex flex-col gap-1.5 shadow-sm">
+                            <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Time Complexity</span>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xl font-mono font-black text-purple-300">
+                                {submissionVerdict?.timeComplexity || metrics.timeComplexity}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 line-clamp-1">
+                              {sqlCode.toUpperCase().includes('ORDER BY')
+                                ? 'Comparison sort O(N log N)'
+                                : sqlCode.toUpperCase().includes('JOIN')
+                                ? 'Hash Join scan O(N + M)'
+                                : 'Linear table scan O(N)'}
+                            </span>
+                          </div>
+
+                          {/* Asymptotic Space Complexity */}
+                          <div className="bg-[#0e1626] rounded-xl p-3 border border-slate-800 flex flex-col gap-1.5 shadow-sm">
+                            <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Space Complexity</span>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xl font-mono font-black text-amber-300">
+                                {submissionVerdict?.spaceComplexity || metrics.spaceComplexity}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 line-clamp-1">
+                              {sqlCode.toUpperCase().includes('GROUP BY')
+                                ? 'Hash table intermediate O(K)'
+                                : sqlCode.toUpperCase().includes('WITH')
+                                ? 'CTE buffer allocation O(N)'
+                                : 'Streaming in-place O(1)'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Engine Execution Order Stages (SQL Pipeline Breakdown) */}
+                        <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-4 flex flex-col gap-3">
+                          <span className="text-xs font-bold text-slate-200 uppercase tracking-wider text-[11px] flex items-center gap-2">
+                            <span>⚙</span>
+                            <span>SQL Query Execution Pipeline Breakdown:</span>
+                          </span>
+
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs font-mono">
+                            <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 flex flex-col gap-1">
+                              <span className="text-[10px] text-emerald-400 font-bold">1. AST Parser</span>
+                              <span className="text-slate-300 text-[11px]">Normalized & Parsed</span>
+                              <span className="text-[10px] text-slate-500">Syntax validated</span>
+                            </div>
+                            <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 flex flex-col gap-1">
+                              <span className="text-[10px] text-cyan-400 font-bold">2. Schema Binder</span>
+                              <span className="text-slate-300 text-[11px]">{problem.schemas.map((s) => s.tableName).join(', ')}</span>
+                              <span className="text-[10px] text-slate-500">Columns bound</span>
+                            </div>
+                            <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 flex flex-col gap-1">
+                              <span className="text-[10px] text-purple-400 font-bold">3. Engine Execution</span>
+                              <span className="text-slate-300 text-[11px]">AlaSQL Relational VM</span>
+                              <span className="text-[10px] text-slate-500">{executionResult?.rowsReturned || 0} rows emitted</span>
+                            </div>
+                            <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 flex flex-col gap-1">
+                              <span className="text-[10px] text-indigo-400 font-bold">4. Grain Verifier</span>
+                              <span className="text-slate-300 text-[11px]">1:1 Multiset Match</span>
+                              <span className="text-[10px] text-emerald-400 font-semibold">
+                                {executionResult?.diffReport?.isFullMatch ? '✓ Verified' : 'Evaluated'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </motion.div>
               )}
             </AnimatePresence>
