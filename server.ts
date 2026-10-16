@@ -702,6 +702,136 @@ Output only valid JSON.`;
   });
 });
 
+// 5. AI SQL Copilot: Explain Error & Hints Without Spoilers
+app.post('/api/ai-explain-error', async (req, res) => {
+  const { sqlCode, problemTitle, requirements, errorType, errorMessage, diffReport } = req.body || {};
+
+  try {
+    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
+      const prompt = `You are a World-Class SQL Technical Interview Coach.
+A candidate submitted a SQL query that failed with [${errorType === 'compile_error' ? 'COMPILE / SYNTAX ERROR' : 'WRONG ANSWER / MISMATCH'}].
+Problem Title: "${problemTitle || 'SQL Challenge'}"
+Requirements: ${JSON.stringify(requirements || [])}
+Candidate's SQL:
+${sqlCode || ''}
+Runtime Error / Mismatch: ${errorMessage || JSON.stringify(diffReport || {})}
+
+TASK:
+Explain to the candidate why their query failed conceptually WITHOUT SPOILING THE ENTIRE SOLUTION QUERY.
+For example, explain: "You used WHERE instead of HAVING on an aggregated alias", "Your INNER JOIN dropped records with NULL foreign keys", or "The output column headers are missing alias X".
+Provide progressive clues that guide them to discover the fix themselves.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "conceptTitle": "string (concise 3-6 word concept title)",
+  "rootCause": "string (clear 2-sentence explanation of what went wrong conceptually)",
+  "clauseCulprit": "string (e.g. WHERE ..., GROUP BY ..., SELECT ...)",
+  "progressiveHints": [
+    "string (subtle directional clue)",
+    "string (more specific conceptual pointer)",
+    "string (syntax structure blueprint hint without final answer)"
+  ],
+  "syntaxPattern": "string (generic SQL template demonstrating the correct pattern)",
+  "fixChecklist": ["string", "string", "string"],
+  "explanationConfidence": 95
+}
+Output only valid JSON.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          temperature: 0.2,
+        },
+      });
+
+      const rawText = response.text || '';
+      const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+
+      if (parsed && parsed.conceptTitle && parsed.rootCause) {
+        return res.json({ success: true, analysis: parsed });
+      }
+    }
+  } catch (err: any) {
+    console.log('[AI Copilot] Notice: Utilizing deterministic AST explanation engine:', err?.message || err);
+  }
+
+  return res.json({ success: false, note: 'Falling back to deterministic AST tutor engine' });
+});
+
+// 6. AI Query Optimizer & Index Advisor
+app.post('/api/ai-optimize-query', async (req, res) => {
+  const { sqlCode, schemas, dialect } = req.body || {};
+
+  try {
+    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
+      const prompt = `You are a Principal Database Performance Engineer and SQL Query Optimizer.
+Analyze the following SQL query and schema definitions for ${dialect || 'PostgreSQL'}:
+
+Schemas:
+${JSON.stringify(schemas || [])}
+
+Candidate's SQL:
+${sqlCode || ''}
+
+TASK:
+Analyze AST clauses for non-SARGable predicates (e.g. function wrapping on indexed columns, leading wildcards), SELECT * over-fetching, join algorithms, and CTE materialization.
+Recommend concrete DDL CREATE INDEX statements for WHERE, JOIN, and ORDER BY columns.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "summary": "string (concise 1-2 sentence overview of bottlenecks and performance gains)",
+  "estimatedCostSavings": "string (e.g. -65% Estimated I/O Cost)",
+  "sargableInsights": [
+    {
+      "originalClause": "string",
+      "optimizedClause": "string",
+      "explanation": "string",
+      "isSargable": false
+    }
+  ],
+  "materializationTips": ["string", "string"],
+  "recommendedIndexes": [
+    {
+      "tableName": "string",
+      "indexName": "string",
+      "columns": ["string"],
+      "ddl": "string (e.g. CREATE INDEX idx_... ON table(col);)",
+      "rationale": "string",
+      "type": "B-Tree" | "Composite" | "Covering"
+    }
+  ],
+  "executionPlanComparison": {
+    "before": ["string", "string"],
+    "after": ["string", "string"]
+  }
+}
+Output only valid JSON.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          temperature: 0.2,
+        },
+      });
+
+      const rawText = response.text || '';
+      const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+
+      if (parsed && parsed.summary && parsed.recommendedIndexes) {
+        return res.json({ success: true, analysis: parsed });
+      }
+    }
+  } catch (err: any) {
+    console.log('[Query Optimizer] Notice: Utilizing deterministic optimization engine:', err?.message || err);
+  }
+
+  return res.json({ success: false, note: 'Falling back to deterministic query optimizer engine' });
+});
+
 // 3. Mount Vite Dev Middleware or Static Serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
