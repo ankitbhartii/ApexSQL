@@ -135,6 +135,7 @@ export interface SqlCodeEditorProps {
   dialect?: string;
   schemas?: { tableName: string; columns: { name: string; type: string }[] }[];
   onReset?: () => void;
+  onOpenLocalAi?: (action?: 'explain' | 'error_hint' | 'optimize') => void;
 }
 
 export function formatSqlQuery(sql: string): string {
@@ -164,7 +165,8 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
   height = 'h-72',
   dialect = 'PostgreSQL',
   schemas = [],
-  onReset
+  onReset,
+  onOpenLocalAi,
 }) => {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<Monaco | null>(null);
@@ -465,8 +467,20 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
           </button>
         </div>
 
-        {/* Right Toolbar Actions: Copy, Fullscreen */}
+        {/* Right Toolbar Actions: Local Gemma AI, Copy, Fullscreen */}
         <div className="flex items-center gap-1.5">
+          {onOpenLocalAi && (
+            <button
+              onClick={() => onOpenLocalAi('explain')}
+              className="px-2 py-1 rounded bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 text-cyan-300 hover:text-cyan-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+              title="Explain query or get hints with Local Gemma AI (WebGPU • 0 Server Cost)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Local Gemma</span>
+              <span className="text-[10px] px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono">GPU</span>
+            </button>
+          )}
+
           <button
             onClick={handleCopyCode}
             className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition cursor-pointer"
