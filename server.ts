@@ -8,9 +8,13 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { SUPPORTED_PLATFORMS, AUTHENTIC_PLATFORM_PROBLEMS } from './src/services/platformQuestionsData';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
 app.use(express.json());
@@ -19,14 +23,17 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = '0.0.0.0';
 
 // Initialize Gemini API with recommended full-stack headers
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
+const geminiApiKey = process.env.GEMINI_API_KEY?.trim() || '';
+const ai = geminiApiKey
+  ? new GoogleGenAI({
+      apiKey: geminiApiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    })
+  : null;
 
 // Resilient in-memory cache and rate-limit mitigation for Google Search Grounding
 interface SearchCacheEntry {
@@ -707,7 +714,7 @@ app.post('/api/ai-explain-error', async (req, res) => {
   const { sqlCode, problemTitle, requirements, errorType, errorMessage, diffReport } = req.body || {};
 
   try {
-    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
+    if (ai && geminiApiKey) {
       const prompt = `You are a World-Class SQL Technical Interview Coach.
 A candidate submitted a SQL query that failed with [${errorType === 'compile_error' ? 'COMPILE / SYNTAX ERROR' : 'WRONG ANSWER / MISMATCH'}].
 Problem Title: "${problemTitle || 'SQL Challenge'}"
@@ -765,7 +772,7 @@ app.post('/api/ai-optimize-query', async (req, res) => {
   const { sqlCode, schemas, dialect } = req.body || {};
 
   try {
-    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
+    if (ai && geminiApiKey) {
       const prompt = `You are a Principal Database Performance Engineer and SQL Query Optimizer.
 Analyze the following SQL query and schema definitions for ${dialect || 'PostgreSQL'}:
 
@@ -836,14 +843,15 @@ Output only valid JSON.`;
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
+      root: __dirname,
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static('dist'));
+    app.use(express.static(path.resolve(__dirname, 'dist')));
     app.get('*', (req, res) => {
-      res.sendFile(path.resolve('dist/index.html'));
+      res.sendFile(path.resolve(__dirname, 'dist/index.html'));
     });
   }
 
