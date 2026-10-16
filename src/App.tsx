@@ -30,6 +30,8 @@ import { QuestionsDirectoryPage } from './components/QuestionsDirectoryPage';
 import { UserProfileMenu } from './components/UserProfileMenu';
 import { ProfileDashboard } from './components/ProfileDashboard';
 import { SqlCodeEditor } from './components/SqlCodeEditor';
+import { LocalGemmaAssistant } from './components/LocalGemmaAssistant';
+import { Sparkles } from 'lucide-react';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
 import { subscribeToLiveProblems } from './firebase';
@@ -913,6 +915,8 @@ export default function App() {
     return 'sandbox';
   });
   const [submissionVerdict, setSubmissionVerdict] = useState<SubmissionVerdict | null>(null);
+  const [isLocalAiOpen, setIsLocalAiOpen] = useState(false);
+  const [localAiTriggerAction, setLocalAiTriggerAction] = useState<'explain' | 'error_hint' | 'optimize' | null>(null);
 
   useEffect(() => {
     const handleHash = () => {
@@ -1661,6 +1665,29 @@ export default function App() {
           isSubmit,
         });
       }
+
+      // Record real-time submission in safeStorage for LeetCode Profile & Analytics
+      try {
+        const subRecord = {
+          id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          problemId: problem.id,
+          problemTitle: problem.title,
+          platform: problem.platform || 'LeetCode',
+          difficulty: problem.difficulty || 'Medium',
+          status: isAccepted ? 'Accepted' : (result.status === 'SYNTAX_ERROR' ? 'Compile Error' : 'Wrong Answer'),
+          dialect: dialect || 'PostgreSQL',
+          runtimeMs: Math.max(1, Math.round(result.executionTimeMs || 14)),
+          memoryMb: Number((metrics.memoryMb || 14.2).toFixed(1)),
+          timestamp: Date.now(),
+        };
+        const rawHistory = safeStorage.getItem('apex_submission_history');
+        const historyList = rawHistory ? JSON.parse(rawHistory) : [];
+        const nextHistory = [subRecord, ...(Array.isArray(historyList) ? historyList : [])].slice(0, 100);
+        safeStorage.setItem('apex_submission_history', JSON.stringify(nextHistory));
+      } catch (e) {
+        console.warn('Failed to record submission history', e);
+      }
+
       setIsExecuting(false);
     }, 240);
   }, [sqlCode, problem, currentUser, syncProgressToCloud, syncQueryToCloud, masteredList, reviewList, notesMap, dialect, solvedMap]);
@@ -3133,6 +3160,18 @@ export default function App() {
               >
                 Clear
               </button>
+              <button
+                onClick={() => {
+                  setLocalAiTriggerAction(null);
+                  setIsLocalAiOpen(true);
+                }}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-gradient-to-r from-cyan-600/20 to-teal-600/20 hover:from-cyan-600/35 hover:to-teal-600/35 text-cyan-300 border border-cyan-500/35 flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                title="Open Local Gemma AI (WebGPU • 0 Server Cost • 100% On-Device)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">Local Gemma AI</span>
+                <span className="text-[10px] px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">GPU</span>
+              </button>
               <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span className="font-medium text-slate-300">Draft Auto-Saved</span>
@@ -3172,6 +3211,10 @@ export default function App() {
               dialect={dialect}
               schemas={problem.schemas}
               onReset={handleResetStarter}
+              onOpenLocalAi={(action) => {
+                setLocalAiTriggerAction(action || 'explain');
+                setIsLocalAiOpen(true);
+              }}
               height="h-72 lg:h-80"
             />
           </div>
@@ -3277,6 +3320,17 @@ export default function App() {
                           </>
                         ) : (
                           <>
+                            <button
+                              onClick={() => {
+                                setLocalAiTriggerAction('error_hint');
+                                setIsLocalAiOpen(true);
+                              }}
+                              className="px-3 py-1.5 bg-gradient-to-r from-cyan-600/25 to-teal-600/25 hover:from-cyan-600/40 hover:to-teal-600/40 text-cyan-200 border border-cyan-500/35 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                              title="Ask Local Gemma AI for Socratic hints without spoiling the answer (Runs 100% on your GPU)"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Hint Without Spoilers (Local Gemma)</span>
+                            </button>
                             <button
                               onClick={() => setConsoleTab('result')}
                               className="px-3 py-1.5 bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/40 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5"
@@ -4072,6 +4126,22 @@ export default function App() {
           setCurrentView('directory');
           window.location.hash = '#/questions';
         }}
+      />
+
+      {/* Local Gemma AI Assistant (WebGPU • 0 Server Cost • 100% Client-Side GPU) */}
+      <LocalGemmaAssistant
+        isOpen={isLocalAiOpen}
+        onClose={() => setIsLocalAiOpen(false)}
+        currentSqlCode={sqlCode}
+        problem={problem}
+        dialect={dialect}
+        lastExecutionError={
+          submissionVerdict?.type !== 'correct'
+            ? (submissionVerdict?.details || submissionVerdict?.message)
+            : null
+        }
+        triggerAction={localAiTriggerAction}
+        onResetTrigger={() => setLocalAiTriggerAction(null)}
       />
     </div>
   );
