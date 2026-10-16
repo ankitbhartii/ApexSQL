@@ -33,14 +33,15 @@ import type { SqlProblem } from './types';
 import defaultFirebaseConfig from '../firebase-applet-config.json';
 
 // Support Vercel / custom environment variables with fallback to config file
+const env = typeof import.meta !== 'undefined' && (import.meta as any).env ? (import.meta as any).env : {};
 export const activeFirebaseConfig = {
-  projectId: (import.meta.env.VITE_FIREBASE_PROJECT_ID as string) || defaultFirebaseConfig.projectId,
-  appId: (import.meta.env.VITE_FIREBASE_APP_ID as string) || defaultFirebaseConfig.appId,
-  apiKey: (import.meta.env.VITE_FIREBASE_API_KEY as string) || defaultFirebaseConfig.apiKey,
-  authDomain: (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string) || defaultFirebaseConfig.authDomain,
-  firestoreDatabaseId: (import.meta.env.VITE_FIREBASE_DATABASE_ID as string) || defaultFirebaseConfig.firestoreDatabaseId,
-  storageBucket: (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string) || defaultFirebaseConfig.storageBucket,
-  messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || defaultFirebaseConfig.messagingSenderId,
+  projectId: (env.VITE_FIREBASE_PROJECT_ID as string) || defaultFirebaseConfig.projectId,
+  appId: (env.VITE_FIREBASE_APP_ID as string) || defaultFirebaseConfig.appId,
+  apiKey: (env.VITE_FIREBASE_API_KEY as string) || defaultFirebaseConfig.apiKey,
+  authDomain: (env.VITE_FIREBASE_AUTH_DOMAIN as string) || defaultFirebaseConfig.authDomain,
+  firestoreDatabaseId: (env.VITE_FIREBASE_DATABASE_ID as string) || defaultFirebaseConfig.firestoreDatabaseId,
+  storageBucket: (env.VITE_FIREBASE_STORAGE_BUCKET as string) || defaultFirebaseConfig.storageBucket,
+  messagingSenderId: (env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || defaultFirebaseConfig.messagingSenderId,
 };
 
 // Initialize Firebase App

@@ -457,6 +457,25 @@ function computeLeetCodeMetrics(cleanSql: string, elapsedMs: number, rowCount: n
 
 // ============================================================================
 // REAL IN-MEMORY SQL EXECUTION ENGINE (Powered by AlaSQL)
+function splitTopLevelColumns(selectStr: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (let i = 0; i < selectStr.length; i++) {
+    const char = selectStr[i];
+    if (char === '(') depth++;
+    else if (char === ')') depth--;
+    if (char === ',' && depth === 0) {
+      parts.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
 // Executes queries against schema sample data with comment sanitization
 // ============================================================================
 function runSqlWithAlaSql(
@@ -497,6 +516,26 @@ function runSqlWithAlaSql(
         execQuery = execQuery.replace(regex, `[${rawName}]`);
       }
     });
+
+    // Snowflake / MySQL compatibility: Resolve SELECT aliases used in HAVING clause
+    const selectMatch = execQuery.match(/SELECT\s+([\s\S]+?)\s+FROM/i);
+    const havingMatch = execQuery.match(/HAVING\s+([\s\S]+?)(?:\s+ORDER\s+BY|\s+LIMIT|$)/i);
+    if (selectMatch && havingMatch) {
+      const selectCols = splitTopLevelColumns(selectMatch[1]);
+      const aliases = selectCols
+        .map((c) => {
+          const m = c.match(/^([\s\S]+?)\s+AS\s+([a-zA-Z0-9_]+)$/i);
+          return m ? { expr: m[1].trim(), alias: m[2].trim() } : null;
+        })
+        .filter(Boolean) as { expr: string; alias: string }[];
+
+      let havingClause = havingMatch[1];
+      for (const { expr, alias } of aliases) {
+        const wordRegex = new RegExp(`\\b${alias}\\b`, 'gi');
+        havingClause = havingClause.replace(wordRegex, `(${expr})`);
+      }
+      execQuery = execQuery.replace(havingMatch[1], havingClause);
+    }
 
     const rawResult = db.exec(execQuery);
     const rows: Record<string, any>[] = Array.isArray(rawResult) ? rawResult : [];
@@ -759,7 +798,34 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     problem.expectedOutput.rows
   );
 
-  if (diffReport.isFullMatch) {
+  let finalReport = diffReport;
+
+  // Dual verification: If direct static expectedOutput comparison had an output mismatch,
+  // execute the problem's official reference solution directly against the sample database table.
+  // If the candidate's output matches the official solution's output, it is 100% ACCEPTED.
+  if (!finalReport.isFullMatch) {
+    const officialSql =
+      problem.officialSolutionByDialect?.postgres ||
+      problem.officialSolutionByDialect?.snowflake ||
+      problem.officialSolutionByDialect?.mysql ||
+      problem.hints?.tier3Skeleton;
+    if (officialSql) {
+      const officialExec = runSqlWithAlaSql(officialSql, problem);
+      if (officialExec.success && officialExec.rows.length > 0) {
+        const officialDiff = generateDiffReport(
+          userColumns,
+          userRows,
+          officialExec.columns,
+          officialExec.rows
+        );
+        if (officialDiff.isFullMatch) {
+          finalReport = officialDiff;
+        }
+      }
+    }
+  }
+
+  if (finalReport.isFullMatch) {
     // If output is 100% full match, query is ACCEPTED (matching LeetCode / HackerRank behavior)
     const finalizedChecklist = checklist.map((c) => ({ ...c, passed: true }));
     return {
@@ -770,7 +836,7 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
       outputColumns: userColumns.length > 0 ? userColumns : problem.expectedOutput.columns,
       outputRows: userRows,
       checklist: finalizedChecklist,
-      diffReport,
+      diffReport: finalReport,
     };
   }
 
@@ -778,14 +844,14 @@ function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
     status: 'NEEDS_ADJUSTMENT',
     executionTimeMs: elapsed,
     message:
-      diffReport.missingColumns.length > 0
-        ? `Missing required columns: ${diffReport.missingColumns.join(', ')}`
+      finalReport.missingColumns.length > 0
+        ? `Missing required columns: ${finalReport.missingColumns.join(', ')}`
         : 'Query compiled, but did not satisfy all business requirements or structural clauses.',
     rowsReturned: userRows.length,
     outputColumns: userColumns.length > 0 ? userColumns : problem.expectedOutput.columns,
     outputRows: userRows,
     checklist,
-    diffReport,
+    diffReport: finalReport,
   };
 }
 
