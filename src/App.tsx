@@ -28,6 +28,7 @@ import { AuthModal } from './components/AuthModal';
 import { PlatformFetchModal } from './components/PlatformFetchModal';
 import { QuestionsDirectoryPage } from './components/QuestionsDirectoryPage';
 import { UserProfileMenu } from './components/UserProfileMenu';
+import { ProfileDashboard } from './components/ProfileDashboard';
 import { SqlCodeEditor } from './components/SqlCodeEditor';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
@@ -899,11 +900,14 @@ export default function App() {
   const [groundedSearchResult, setGroundedSearchResult] = useState<GoogleSearchGroundedPayload | null>(null);
   const [isGoogleSearchPanelOpen, setIsGoogleSearchPanelOpen] = useState<boolean>(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState<boolean>(false);
-  const [currentView, setCurrentView] = useState<'sandbox' | 'directory'>(() => {
+  const [currentView, setCurrentView] = useState<'sandbox' | 'directory' | 'profile'>(() => {
     if (typeof window !== 'undefined') {
       const h = window.location.hash;
       if (h === '#/questions' || h === '#/directory' || h === '#question-library') {
         return 'directory';
+      }
+      if (h === '#/profile' || h === '#/analytics' || h === '#/dashboard') {
+        return 'profile';
       }
     }
     return 'sandbox';
@@ -915,6 +919,8 @@ export default function App() {
       const hash = window.location.hash;
       if (hash === '#/questions' || hash === '#/directory' || hash === '#question-library') {
         setCurrentView('directory');
+      } else if (hash === '#/profile' || hash === '#/analytics' || hash === '#/dashboard') {
+        setCurrentView('profile');
       } else if (hash === '#/sandbox') {
         setCurrentView('sandbox');
       }
@@ -1810,6 +1816,16 @@ export default function App() {
                   1,309
                 </span>
               </button>
+              <button
+                onClick={() => {
+                  setCurrentView('profile');
+                  window.location.hash = '#/profile';
+                }}
+                className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
+              >
+                <span>📊</span>
+                <span>Profile</span>
+              </button>
             </div>
           </div>
 
@@ -1828,6 +1844,10 @@ export default function App() {
               solvedCount={Object.keys(solvedMap).length}
               masteredCount={masteredList.length}
               onSyncAll={handleCloudSyncAll}
+              onOpenProfile={() => {
+                setCurrentView('profile');
+                window.location.hash = '#/profile';
+              }}
             />
           </div>
         </header>
@@ -1848,6 +1868,26 @@ export default function App() {
           </div>
         )}
       </div>
+    );
+  }
+
+  if (currentView === 'profile') {
+    return (
+      <ProfileDashboard
+        solvedMap={solvedMap}
+        masteredList={masteredList}
+        reviewList={reviewList}
+        onSelectProblem={handleSelectDirectoryProblem}
+        onBackToSandbox={() => {
+          setCurrentView('sandbox');
+          window.location.hash = '#/sandbox';
+        }}
+        onOpenDirectory={() => {
+          setCurrentView('directory');
+          window.location.hash = '#/questions';
+        }}
+        onSyncAll={handleCloudSyncAll}
+      />
     );
   }
 
@@ -1898,6 +1938,20 @@ export default function App() {
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono leading-none">
                 1,309
               </span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentView('profile');
+                window.location.hash = '#/profile';
+              }}
+              className={`px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+                currentView === 'profile'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>📊</span>
+              <span>Profile</span>
             </button>
           </div>
 
@@ -2033,6 +2087,10 @@ export default function App() {
               solvedCount={Object.keys(solvedMap).length}
               masteredCount={masteredList.length}
               onSyncAll={handleCloudSyncAll}
+              onOpenProfile={() => {
+                setCurrentView('profile');
+                window.location.hash = '#/profile';
+              }}
             />
           </div>
         </div>
@@ -2059,6 +2117,10 @@ export default function App() {
               solvedCount={Object.keys(solvedMap).length}
               masteredCount={masteredList.length}
               onSyncAll={handleCloudSyncAll}
+              onOpenProfile={() => {
+                setCurrentView('profile');
+                window.location.hash = '#/profile';
+              }}
             />
 
             <button
