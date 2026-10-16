@@ -1936,7 +1936,7 @@ export default function App() {
       {/* ==================================================================== */}
       {/* 1. TOP DOCKED HEADER (DESKTOP & TABLET) */}
       {/* ==================================================================== */}
-      <header className="hidden md:flex items-center justify-between px-2 sm:px-3 lg:px-4 h-14 bg-[#0b1120]/95 backdrop-blur-md border-b border-slate-800/80 shrink-0 z-30 select-none gap-1.5 lg:gap-2 w-full max-w-full overflow-hidden">
+      <header className="hidden md:flex items-center justify-between px-2 sm:px-3 lg:px-4 h-14 bg-[#0b1120]/95 backdrop-blur-md border-b border-slate-800/80 shrink-0 z-40 select-none gap-1.5 lg:gap-2 w-full max-w-full">
         {/* Left: Brand + View Switcher + Challenge Mode */}
         <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
           <div className="flex items-center gap-1.5 mr-0.5 shrink-0">
