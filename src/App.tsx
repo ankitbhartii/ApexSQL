@@ -29,13 +29,6 @@ import { PlatformFetchModal } from './components/PlatformFetchModal';
 import { QuestionsDirectoryPage } from './components/QuestionsDirectoryPage';
 import { UserProfileMenu } from './components/UserProfileMenu';
 import { ProfileDashboard } from './components/ProfileDashboard';
-import { AIDebuggerModal } from './components/AIDebuggerModal';
-import { QueryOptimizerPanel } from './components/QueryOptimizerPanel';
-import {
-  explainErrorWithAI,
-  analyzeErrorDeterministically,
-  type AIDebugAnalysis
-} from './services/aiCopilotService';
 import { SqlCodeEditor } from './components/SqlCodeEditor';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
@@ -921,11 +914,6 @@ export default function App() {
   });
   const [submissionVerdict, setSubmissionVerdict] = useState<SubmissionVerdict | null>(null);
 
-  // AI SQL Copilot & Diagnostic Tutor State
-  const [isAIDebuggerOpen, setIsAIDebuggerOpen] = useState<boolean>(false);
-  const [aiDebugAnalysis, setAiDebugAnalysis] = useState<AIDebugAnalysis | null>(null);
-  const [isAnalyzingError, setIsAnalyzingError] = useState<boolean>(false);
-
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
@@ -1035,34 +1023,6 @@ export default function App() {
   });
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
-
-  const handleTriggerAIDebugger = useCallback(async () => {
-    setIsAIDebuggerOpen(true);
-    setIsAnalyzingError(true);
-    try {
-      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
-      const analysis = await explainErrorWithAI(
-        sqlCode,
-        problem,
-        errType,
-        submissionVerdict?.message || executionResult?.message,
-        executionResult?.diffReport
-      );
-      setAiDebugAnalysis(analysis);
-    } catch {
-      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
-      const fallback = analyzeErrorDeterministically(
-        sqlCode,
-        problem,
-        errType,
-        submissionVerdict?.message || executionResult?.message,
-        executionResult?.diffReport
-      );
-      setAiDebugAnalysis(fallback);
-    } finally {
-      setIsAnalyzingError(false);
-    }
-  }, [sqlCode, problem, submissionVerdict, executionResult]);
 
   // LeetCode Console Tabs: 'result' | 'expected' | 'testcase' | 'complexity'
   type ConsoleTabType = 'result' | 'expected' | 'testcase' | 'complexity';
@@ -3316,14 +3276,6 @@ export default function App() {
                         ) : (
                           <>
                             <button
-                              onClick={handleTriggerAIDebugger}
-                              className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-lg shadow-md shadow-purple-600/30 transition cursor-pointer flex items-center gap-1.5 active:scale-95 animate-pulse"
-                              title="Ask AI Copilot to explain why the query failed without spoiling the solution"
-                            >
-                              <span>✨</span>
-                              <span>AI Debugger: Explain Error (No Spoilers)</span>
-                            </button>
-                            <button
                               onClick={() => setConsoleTab('result')}
                               className="px-3 py-1.5 bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/40 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5"
                             >
@@ -3778,13 +3730,6 @@ export default function App() {
                             </div>
                           </div>
                         </div>
-
-                        {/* AI Query Optimizer & Index Advisor */}
-                        <QueryOptimizerPanel
-                          sqlCode={sqlCode}
-                          problem={problem}
-                          dialect={dialect}
-                        />
                       </div>
                     );
                   })()}
@@ -4125,14 +4070,6 @@ export default function App() {
           setCurrentView('directory');
           window.location.hash = '#/questions';
         }}
-      />
-
-      {/* AI SQL Copilot & Diagnostic Tutor Modal */}
-      <AIDebuggerModal
-        isOpen={isAIDebuggerOpen}
-        onClose={() => setIsAIDebuggerOpen(false)}
-        analysis={aiDebugAnalysis}
-        isLoading={isAnalyzingError}
       />
     </div>
   );
