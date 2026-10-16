@@ -926,34 +926,6 @@ export default function App() {
   const [aiDebugAnalysis, setAiDebugAnalysis] = useState<AIDebugAnalysis | null>(null);
   const [isAnalyzingError, setIsAnalyzingError] = useState<boolean>(false);
 
-  const handleTriggerAIDebugger = useCallback(async () => {
-    setIsAIDebuggerOpen(true);
-    setIsAnalyzingError(true);
-    try {
-      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
-      const analysis = await explainErrorWithAI(
-        sqlCode,
-        problem,
-        errType,
-        submissionVerdict?.message || executionResult?.message,
-        executionResult?.diffReport
-      );
-      setAiDebugAnalysis(analysis);
-    } catch {
-      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
-      const fallback = analyzeErrorDeterministically(
-        sqlCode,
-        problem,
-        errType,
-        submissionVerdict?.message || executionResult?.message,
-        executionResult?.diffReport
-      );
-      setAiDebugAnalysis(fallback);
-    } finally {
-      setIsAnalyzingError(false);
-    }
-  }, [sqlCode, problem, submissionVerdict, executionResult]);
-
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
@@ -1063,6 +1035,34 @@ export default function App() {
   });
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+
+  const handleTriggerAIDebugger = useCallback(async () => {
+    setIsAIDebuggerOpen(true);
+    setIsAnalyzingError(true);
+    try {
+      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
+      const analysis = await explainErrorWithAI(
+        sqlCode,
+        problem,
+        errType,
+        submissionVerdict?.message || executionResult?.message,
+        executionResult?.diffReport
+      );
+      setAiDebugAnalysis(analysis);
+    } catch {
+      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
+      const fallback = analyzeErrorDeterministically(
+        sqlCode,
+        problem,
+        errType,
+        submissionVerdict?.message || executionResult?.message,
+        executionResult?.diffReport
+      );
+      setAiDebugAnalysis(fallback);
+    } finally {
+      setIsAnalyzingError(false);
+    }
+  }, [sqlCode, problem, submissionVerdict, executionResult]);
 
   // LeetCode Console Tabs: 'result' | 'expected' | 'testcase' | 'complexity'
   type ConsoleTabType = 'result' | 'expected' | 'testcase' | 'complexity';
@@ -2020,7 +2020,7 @@ export default function App() {
             <select
               value={activeTopic}
               onChange={(e) => handleSelectTopic(e.target.value as TopicCategory)}
-              className="hidden 2xl:block h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer max-w-[140px] truncate whitespace-nowrap shrink-0"
+              className="hidden lg:block h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer max-w-[130px] xl:max-w-[160px] truncate whitespace-nowrap shrink-0"
               title="Filter by SQL Topic"
             >
               {TOPIC_DRILL_CONFIGS.map((t) => (
