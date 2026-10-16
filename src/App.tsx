@@ -1661,6 +1661,29 @@ export default function App() {
           isSubmit,
         });
       }
+
+      // Record real-time submission in safeStorage for LeetCode Profile & Analytics
+      try {
+        const subRecord = {
+          id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          problemId: problem.id,
+          problemTitle: problem.title,
+          platform: problem.platform || 'LeetCode',
+          difficulty: problem.difficulty || 'Medium',
+          status: isAccepted ? 'Accepted' : (result.status === 'SYNTAX_ERROR' ? 'Compile Error' : 'Wrong Answer'),
+          dialect: dialect || 'PostgreSQL',
+          runtimeMs: Math.max(1, Math.round(result.executionTimeMs || 14)),
+          memoryMb: Number((metrics.memoryMb || 14.2).toFixed(1)),
+          timestamp: Date.now(),
+        };
+        const rawHistory = safeStorage.getItem('apex_submission_history');
+        const historyList = rawHistory ? JSON.parse(rawHistory) : [];
+        const nextHistory = [subRecord, ...(Array.isArray(historyList) ? historyList : [])].slice(0, 100);
+        safeStorage.setItem('apex_submission_history', JSON.stringify(nextHistory));
+      } catch (e) {
+        console.warn('Failed to record submission history', e);
+      }
+
       setIsExecuting(false);
     }, 240);
   }, [sqlCode, problem, currentUser, syncProgressToCloud, syncQueryToCloud, masteredList, reviewList, notesMap, dialect, solvedMap]);
