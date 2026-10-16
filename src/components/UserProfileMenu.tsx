@@ -71,12 +71,12 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
 
   if (!currentUser) {
     return (
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0" ref={menuRef}>
         <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => openAuthModal('signin')}
-          className="h-8 px-2.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-750 border border-slate-700/80 hover:border-slate-600 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
+          className="h-8.5 px-3 rounded-full text-xs font-semibold text-slate-200 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-cyan-400/40 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
           title="Sign in to sync your SQL progress"
         >
           <LogIn className="w-3.5 h-3.5 text-cyan-400" />
@@ -84,14 +84,13 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
         </motion.button>
 
         <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => openAuthModal('signup')}
-          className="relative group overflow-hidden h-8 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 hover:from-indigo-400 hover:to-cyan-400 shadow-md shadow-indigo-500/20 border border-indigo-400/40 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap hidden sm:inline-flex"
+          className="relative group overflow-hidden h-8.5 px-3 rounded-full text-xs font-bold text-white bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 hover:from-indigo-400 hover:to-cyan-400 shadow-sm border border-indigo-400/30 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap hidden sm:inline-flex"
           title="Create a free candidate cloud profile"
         >
-          <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
-          <Sparkles className="w-3.5 h-3.5 text-cyan-200 animate-pulse" />
+          <Sparkles className="w-3.5 h-3.5 text-cyan-200" />
           <span>Sign Up</span>
         </motion.button>
       </div>
@@ -106,28 +105,28 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
 
   return (
     <div className="relative shrink-0" ref={menuRef}>
-      {/* Trigger Button */}
+      {/* Trigger Button - Apple Music Frosted Pill */}
       <motion.button
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="h-8 flex items-center gap-1.5 px-2 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-750 hover:border-cyan-500/50 transition cursor-pointer text-left shrink-0 shadow-xs max-w-[120px] 2xl:max-w-[155px]"
+        className="h-8.5 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 rounded-full bg-slate-900/85 hover:bg-slate-800/90 border border-white/10 hover:border-cyan-400/50 transition-all cursor-pointer text-left shrink-0 shadow-sm select-none"
         aria-label="User Profile Menu"
       >
         {photo ? (
           <img
             src={photo}
             alt={displayName}
-            className="w-5 h-5 rounded-full border border-cyan-400/60 object-cover shrink-0"
+            className="w-5.5 h-5.5 rounded-full border border-cyan-400/70 object-cover shrink-0"
           />
         ) : (
-          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold shadow-xs shrink-0">
+          <div className="w-5.5 h-5.5 rounded-full bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center text-white text-[11px] font-bold shadow-xs shrink-0">
             {displayName.charAt(0).toUpperCase()}
           </div>
         )}
 
-        <div className="hidden xl:flex items-center gap-1 text-left min-w-0">
-          <span className="text-xs font-semibold text-slate-200 max-w-[55px] xl:max-w-[68px] 2xl:max-w-[90px] truncate">
+        <div className="flex items-center gap-1 text-left min-w-0">
+          <span className="text-xs font-semibold text-slate-200 max-w-[55px] sm:max-w-[70px] md:max-w-[85px] xl:max-w-[110px] truncate">
             {displayName}
           </span>
           {/* Live Database status beacon */}
@@ -148,15 +147,15 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
         <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </motion.button>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown Menu - Glassmorphic, anchored safely to viewport */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.96 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 py-3 px-3 z-50 text-slate-200"
+            className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-[#0b1120]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/90 py-3 px-3 z-50 text-slate-200"
           >
             {/* User Profile Card */}
             <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 mb-2.5">

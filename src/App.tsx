@@ -30,6 +30,7 @@ import { QuestionsDirectoryPage } from './components/QuestionsDirectoryPage';
 import { UserProfileMenu } from './components/UserProfileMenu';
 import { ProfileDashboard } from './components/ProfileDashboard';
 import { SqlCodeEditor } from './components/SqlCodeEditor';
+import { MoreHorizontal } from 'lucide-react';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
 import { subscribeToLiveProblems } from './firebase';
@@ -913,6 +914,18 @@ export default function App() {
   const [isMobileFilterDrawerOpen, setIsMobileFilterDrawerOpen] = useState<boolean>(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState<boolean>(false);
   const [insertToast, setInsertToast] = useState<string | null>(null);
+  const [isNavOverflowOpen, setIsNavOverflowOpen] = useState<boolean>(false);
+  const navOverflowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (navOverflowRef.current && !navOverflowRef.current.contains(e.target as Node)) {
+        setIsNavOverflowOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
 
   // Dialect & Editor State
   const [dialect, setDialect] = useState<Dialect>(() => {
@@ -1877,31 +1890,33 @@ export default function App() {
   if (currentView === 'directory') {
     return (
       <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans">
-        {/* Persistent top header */}
-        <header className="flex items-center justify-between px-4 lg:px-6 h-14 bg-[#0f172a] border-b border-slate-800 shrink-0 z-30 select-none sticky top-0">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 mr-1">
-              <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/20">
-                SQL
-              </span>
-              <span className="font-extrabold text-sm tracking-tight text-white">ApexSQL</span>
+        {/* Persistent top header - Apple Music frosted design */}
+        <header className="flex items-center justify-between px-3 sm:px-4 lg:px-6 h-14 bg-[#080d1a]/90 backdrop-blur-2xl border-b border-white/[0.08] shrink-0 z-30 select-none sticky top-0 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 mr-0.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-cyan-500 to-teal-400 p-0.5 shadow-md shadow-cyan-500/15">
+                <div className="w-full h-full bg-[#0b1120] rounded-[10px] flex items-center justify-center font-black text-xs text-white tracking-wider">
+                  SQL
+                </div>
+              </div>
+              <span className="font-extrabold text-sm tracking-tight text-white hidden sm:inline">ApexSQL</span>
             </div>
 
-            <div className="inline-flex items-center p-0.5 bg-slate-900 rounded-lg border border-slate-750">
+            <nav className="inline-flex items-center p-0.5 bg-slate-950/80 rounded-full border border-white/[0.08] shadow-inner">
               <button
                 onClick={() => {
                   setCurrentView('sandbox');
                   window.location.hash = '#/sandbox';
                 }}
-                className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
+                className="h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
               >
                 <span>⚡</span>
                 <span>Sandbox</span>
               </button>
-              <button className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-cyan-600 text-white shadow-xs">
+              <button className="h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-sm">
                 <span>📚</span>
-                <span>All Questions</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono">
+                <span>Questions</span>
+                <span className="hidden sm:inline-block px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono">
                   1,309
                 </span>
               </button>
@@ -1910,24 +1925,24 @@ export default function App() {
                   setCurrentView('profile');
                   window.location.hash = '#/profile';
                 }}
-                className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
+                className="h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
               >
                 <span>📊</span>
                 <span>Profile</span>
               </button>
-            </div>
+            </nav>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 shrink-0 pr-1">
             <button
               onClick={() => {
                 setCurrentView('sandbox');
                 window.location.hash = '#/sandbox';
               }}
-              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md cursor-pointer"
+              className="h-8.5 px-3 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-500/20 cursor-pointer shrink-0"
             >
               <span>⚡</span>
-              <span>Open SQL Sandbox</span>
+              <span className="hidden sm:inline">Open SQL Sandbox</span>
             </button>
             <UserProfileMenu
               solvedCount={Object.keys(solvedMap).length}
@@ -1983,28 +1998,30 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen max-h-screen overflow-hidden bg-[#090d16] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
       {/* ==================================================================== */}
-      {/* 1. TOP DOCKED HEADER (DESKTOP & TABLET) */}
+      {/* 1. TOP DOCKED HEADER (DESKTOP & TABLET - APPLE MUSIC FROSTED LUXURY) */}
       {/* ==================================================================== */}
-      <header className="hidden md:flex items-center justify-between px-2 sm:px-3 lg:px-4 h-14 bg-[#0b1120]/95 backdrop-blur-md border-b border-slate-800/80 shrink-0 z-40 select-none gap-1.5 lg:gap-2 w-full max-w-full">
+      <header className="hidden md:flex items-center justify-between px-2 sm:px-3 lg:px-4 h-13.5 bg-[#080d1a]/85 backdrop-blur-2xl border-b border-white/[0.08] shrink-0 z-40 select-none gap-2 w-full max-w-full shadow-sm">
         {/* Left: Brand + View Switcher + Challenge Mode */}
-        <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 lg:gap-2.5 shrink-0 min-w-0">
           <div className="flex items-center gap-1.5 mr-0.5 shrink-0">
-            <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/20">
+            <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-cyan-400 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/25">
               SQL
             </span>
-            <span className="font-extrabold text-sm tracking-tight text-white hidden sm:inline">ApexSQL</span>
+            <span className="font-black text-sm tracking-tight text-white hidden lg:inline bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+              ApexSQL
+            </span>
           </div>
 
-          {/* View Mode Navigation Tabs */}
-          <div className="inline-flex items-center p-0.5 bg-slate-900/90 rounded-lg border border-slate-800 shrink-0 h-8">
+          {/* Apple Music Style Segmented Pill Control */}
+          <div className="inline-flex items-center p-0.5 bg-slate-950/80 rounded-full border border-white/[0.08] shrink-0 h-8 backdrop-blur-md shadow-inner">
             <button
               onClick={() => {
                 setCurrentView('sandbox');
                 window.location.hash = '#/sandbox';
               }}
-              className={`px-2 lg:px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+              className={`px-2.5 lg:px-3 h-full rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
                 currentView === 'sandbox'
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
+                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-sm shadow-indigo-500/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -2016,15 +2033,15 @@ export default function App() {
                 setCurrentView('directory');
                 window.location.hash = '#/questions';
               }}
-              className={`px-2 lg:px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+              className={`px-2.5 lg:px-3 h-full rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
                 (currentView as string) === 'directory'
-                  ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/25'
+                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-sm shadow-cyan-500/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <span>📚</span>
               <span>Questions</span>
-              <span className="hidden xl:inline-block px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono leading-none">
+              <span className="hidden xl:inline-block px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-400/20 text-cyan-200 font-mono leading-none">
                 1,309
               </span>
             </button>
@@ -2033,9 +2050,9 @@ export default function App() {
                 setCurrentView('profile');
                 window.location.hash = '#/profile';
               }}
-              className={`px-2 lg:px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+              className={`px-2.5 lg:px-3 h-full rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
                 (currentView as string) === 'profile'
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
+                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-sm shadow-indigo-500/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -2044,81 +2061,83 @@ export default function App() {
             </button>
           </div>
 
-          <div className="h-4 w-px bg-slate-800 mx-0.5 shrink-0" />
-
-          {/* Mode Dropdown */}
-          <select
-            value={activeMode}
-            onChange={(e) => {
-              setActiveMode(e.target.value as Mode);
-              setQuestionNumber(1);
-              setJumpInput('1');
-            }}
-            className="h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-100 font-semibold text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer shadow-xs whitespace-nowrap shrink-0 max-w-[125px] xl:max-w-[155px] 2xl:max-w-[170px]"
-            title="Switch Challenge Mode"
-          >
-            <option value="skill_matrix">⚡ Skill Matrix</option>
-            <option value="leetcode">🎯 LeetCode Challenges</option>
-            <option value="hackerrank">🏆 HackerRank Multi-Table</option>
-            <option value="faang_mock">💼 FAANG+ Mock Cases</option>
-            <option value="live_stream">📡 Live Contest Stream</option>
-          </select>
-
-          {/* Topic Dropdown - only when in sandbox and on xl+ screens to prevent navbar overcrowding */}
-          {currentView === 'sandbox' && (
+          {/* Mode Dropdown (Visible on xl+ screens) */}
+          <div className="hidden xl:flex items-center shrink-0">
             <select
-              value={activeTopic}
-              onChange={(e) => handleSelectTopic(e.target.value as TopicCategory)}
-              className="hidden xl:block h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer max-w-[115px] xl:max-w-[135px] 2xl:max-w-[160px] truncate whitespace-nowrap shrink-0"
-              title="Filter by SQL Topic"
+              value={activeMode}
+              onChange={(e) => {
+                setActiveMode(e.target.value as Mode);
+                setQuestionNumber(1);
+                setJumpInput('1');
+              }}
+              className="h-8 bg-slate-900/80 hover:bg-slate-800/90 border border-white/[0.08] text-slate-100 font-semibold text-xs rounded-full px-3 focus:outline-hidden cursor-pointer shadow-xs whitespace-nowrap shrink-0 max-w-[150px] 2xl:max-w-[170px] backdrop-blur-md transition-colors"
+              title="Switch Challenge Mode"
             >
-              {TOPIC_DRILL_CONFIGS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.icon} {t.label} ({t.count.toLocaleString()})
-                </option>
-              ))}
+              <option value="skill_matrix">⚡ Skill Matrix</option>
+              <option value="leetcode">🎯 LeetCode Challenges</option>
+              <option value="hackerrank">🏆 HackerRank Multi-Table</option>
+              <option value="faang_mock">💼 FAANG+ Mock Cases</option>
+              <option value="live_stream">📡 Live Contest Stream</option>
             </select>
+          </div>
+
+          {/* Topic Dropdown - only when in sandbox and on 2xl+ screens */}
+          {currentView === 'sandbox' && (
+            <div className="hidden 2xl:flex items-center shrink-0">
+              <select
+                value={activeTopic}
+                onChange={(e) => handleSelectTopic(e.target.value as TopicCategory)}
+                className="h-8 bg-slate-900/80 hover:bg-slate-800/90 border border-white/[0.08] text-slate-200 font-medium text-xs rounded-full px-3 focus:outline-hidden cursor-pointer max-w-[155px] truncate whitespace-nowrap shrink-0 backdrop-blur-md transition-colors"
+                title="Filter by SQL Topic"
+              >
+                {TOPIC_DRILL_CONFIGS.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.icon} {t.label} ({t.count.toLocaleString()})
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
 
-        {/* Center: Problem Navigation & Interview Timer */}
+        {/* Center: Problem Stepper & Interview Timer */}
         {currentView === 'sandbox' ? (
-          <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 px-2 rounded-lg h-8 shrink-0 whitespace-nowrap shadow-inner">
+          <div className="flex items-center gap-1 bg-slate-950/75 border border-white/[0.08] px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap shadow-inner backdrop-blur-md">
             <button
               onClick={handlePrevQuestion}
-              className="w-6 h-6 rounded flex items-center justify-center text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 font-bold transition cursor-pointer shrink-0"
+              className="w-6.5 h-6.5 rounded-full flex items-center justify-center text-xs text-slate-400 hover:text-white hover:bg-white/10 font-bold transition-all cursor-pointer shrink-0 active:scale-95"
               title="Previous Problem"
             >
               ◀
             </button>
-            <div className="text-xs font-mono font-bold text-slate-200 px-1 whitespace-nowrap flex items-center gap-1">
+            <div className="text-xs font-mono font-bold text-slate-200 px-1.5 whitespace-nowrap flex items-center gap-1">
               <span>Q #{questionNumber.toLocaleString()}</span>
-              <span className="text-slate-500 font-normal">/ {totalQuestionsCount.toLocaleString()}</span>
+              <span className="text-slate-500 font-normal hidden 2xl:inline">/ {totalQuestionsCount.toLocaleString()}</span>
             </div>
             <button
               onClick={handleNextQuestion}
-              className="w-6 h-6 rounded flex items-center justify-center text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 font-bold transition cursor-pointer shrink-0"
+              className="w-6.5 h-6.5 rounded-full flex items-center justify-center text-xs text-slate-400 hover:text-white hover:bg-white/10 font-bold transition-all cursor-pointer shrink-0 active:scale-95"
               title="Next Problem"
             >
               ▶
             </button>
             <button
               onClick={handleShuffle}
-              className="w-6 h-6 rounded flex items-center justify-center text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer shrink-0"
+              className="w-6.5 h-6.5 rounded-full flex items-center justify-center text-xs text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer shrink-0 active:scale-95"
               title="Randomize Problem"
             >
               🔀
             </button>
 
-            <div className="h-3.5 w-px bg-slate-800 mx-1 shrink-0" />
+            <div className="h-3.5 w-px bg-white/10 mx-0.5 shrink-0" />
 
             {/* Compact 1-click Timer */}
             <button
               onClick={handleToggleTimer}
-              className={`px-2 h-6 rounded text-xs font-mono font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`px-2.5 h-6.5 rounded-full text-xs font-mono font-bold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0 active:scale-95 ${
                 isTimerRunning
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs shadow-amber-500/20 animate-pulse'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border border-transparent'
               }`}
               title={isTimerRunning ? 'Timer active - click to pause' : 'Timer paused - click to start'}
             >
@@ -2127,50 +2146,157 @@ export default function App() {
             </button>
           </div>
         ) : (
-          <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-slate-900/60 border border-slate-800/80 rounded-lg text-xs text-slate-400 font-mono">
+          <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-slate-950/70 border border-white/[0.08] rounded-full text-xs text-slate-400 font-mono backdrop-blur-md">
             <span>📚 Question Library</span>
             <span className="text-slate-600">•</span>
             <span className="text-cyan-400 font-bold">1,309 Curated Challenges</span>
           </div>
         )}
 
-        {/* Right: Live Search, Platforms, Solved Count, Storage, Profile / Sign In */}
-        <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 shrink-0 pr-0.5">
-          <button
-            onClick={() => setIsGoogleSearchPanelOpen(true)}
-            className="px-2 lg:px-2.5 h-8 rounded-lg text-xs font-semibold bg-blue-950/60 hover:bg-blue-900/80 text-blue-200 border border-blue-500/40 transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
-            title="Search real-time SQL challenges with Google Search Grounding"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-            </span>
-            <span className="hidden 2xl:inline">Live Contest</span>
-            <span className="2xl:hidden hidden sm:inline">Live</span>
-          </button>
-
-          <button
-            onClick={() => setIsPlatformModalOpen(true)}
-            className="px-2 lg:px-2.5 h-8 rounded-lg text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
-            title="Fetch live questions from LeetCode, HackerRank, DataDriven & FAANG"
-          >
-            <span>🌐</span>
-            <span className="hidden 2xl:inline">Fetch Platforms</span>
-            <span className="2xl:hidden hidden sm:inline">Fetch</span>
-          </button>
-
-          <span className="h-8 text-xs font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 rounded-lg whitespace-nowrap shrink-0">
-            ✓ {Object.keys(solvedMap).length} <span className="hidden 2xl:inline">Solved</span>
+        {/* Right: Live Contest, Platforms, Solved Pill, Overflow Menu & User Profile */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 pr-1">
+          {/* Solved Counter Pill */}
+          <span className="h-8 text-xs font-semibold text-emerald-300 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/25 px-2.5 rounded-full whitespace-nowrap shrink-0 shadow-xs">
+            <span className="text-emerald-400">✓</span> {Object.keys(solvedMap).length} <span className="hidden xl:inline">Solved</span>
           </span>
 
-          <button
-            onClick={() => setIsStorageModalOpen(true)}
-            className="w-8 h-8 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs flex items-center justify-center transition cursor-pointer shrink-0 active:scale-95"
-            title="Storage Settings & Cloud Backup"
-          >
-            💾
-          </button>
+          {/* Direct Buttons on Ultra-Wide (2xl+) */}
+          <div className="hidden 2xl:flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => setIsGoogleSearchPanelOpen(true)}
+              className="px-2.5 h-8 rounded-full text-xs font-semibold bg-blue-950/60 hover:bg-blue-900/80 text-blue-200 border border-blue-500/30 transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
+              title="Search real-time SQL challenges with Google Search Grounding"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+              </span>
+              <span>Live Contest</span>
+            </button>
 
+            <button
+              onClick={() => setIsPlatformModalOpen(true)}
+              className="px-2.5 h-8 rounded-full text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
+              title="Fetch live questions from LeetCode, HackerRank, DataDriven & FAANG"
+            >
+              <span>🌐</span>
+              <span>Fetch Platforms</span>
+            </button>
+
+            <button
+              onClick={() => setIsStorageModalOpen(true)}
+              className="w-8 h-8 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/[0.08] text-slate-300 hover:text-slate-100 text-xs flex items-center justify-center transition cursor-pointer active:scale-95"
+              title="Storage Settings & Cloud Backup"
+            >
+              💾
+            </button>
+          </div>
+
+          {/* Frosted MoreHorizontal Overflow Menu (< 2xl screens) */}
+          <div className="2xl:hidden relative shrink-0" ref={navOverflowRef}>
+            <button
+              onClick={() => setIsNavOverflowOpen((prev) => !prev)}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                isNavOverflowOpen
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 border border-indigo-400/50'
+                  : 'bg-slate-900/80 hover:bg-slate-800/90 text-slate-300 hover:text-white border border-white/[0.08]'
+              }`}
+              title="More Actions & Tools"
+              aria-label="More actions"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+
+            {/* Overflow Dropdown Glass Card */}
+            {isNavOverflowOpen && (
+              <div className="absolute right-0 top-10.5 w-60 bg-[#0b1120]/95 backdrop-blur-2xl border border-white/[0.1] rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 flex flex-col gap-1">
+                {/* Mode Selector for < xl */}
+                <div className="xl:hidden pb-1 mb-1 border-b border-white/[0.08]">
+                  <label className="text-[10px] uppercase font-bold text-slate-400 px-2 py-0.5 block tracking-wider">
+                    Challenge Mode
+                  </label>
+                  <select
+                    value={activeMode}
+                    onChange={(e) => {
+                      setActiveMode(e.target.value as Mode);
+                      setQuestionNumber(1);
+                      setJumpInput('1');
+                      setIsNavOverflowOpen(false);
+                    }}
+                    className="w-full bg-slate-900 border border-white/10 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="skill_matrix">⚡ Skill Matrix</option>
+                    <option value="leetcode">🎯 LeetCode Challenges</option>
+                    <option value="hackerrank">🏆 HackerRank Multi-Table</option>
+                    <option value="faang_mock">💼 FAANG+ Mock Cases</option>
+                    <option value="live_stream">📡 Live Contest Stream</option>
+                  </select>
+                </div>
+
+                {/* Topic Selector for < 2xl (in sandbox) */}
+                {currentView === 'sandbox' && (
+                  <div className="2xl:hidden pb-1 mb-1 border-b border-white/[0.08]">
+                    <label className="text-[10px] uppercase font-bold text-slate-400 px-2 py-0.5 block tracking-wider">
+                      SQL Topic
+                    </label>
+                    <select
+                      value={activeTopic}
+                      onChange={(e) => {
+                        handleSelectTopic(e.target.value as TopicCategory);
+                        setIsNavOverflowOpen(false);
+                      }}
+                      className="w-full bg-slate-900 border border-white/10 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-hidden cursor-pointer"
+                    >
+                      {TOPIC_DRILL_CONFIGS.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.icon} {t.label} ({t.count.toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Action Items */}
+                <button
+                  onClick={() => {
+                    setIsGoogleSearchPanelOpen(true);
+                    setIsNavOverflowOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-blue-200 hover:bg-blue-900/30 transition flex items-center gap-2.5 cursor-pointer"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                  </span>
+                  <span>Live Contest Grounding</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsPlatformModalOpen(true);
+                    setIsNavOverflowOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-indigo-300 hover:bg-indigo-600/20 transition flex items-center gap-2.5 cursor-pointer"
+                >
+                  <span>🌐</span>
+                  <span>Fetch Platforms (LeetCode, etc.)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsStorageModalOpen(true);
+                    setIsNavOverflowOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/10 transition flex items-center gap-2.5 cursor-pointer"
+                >
+                  <span>💾</span>
+                  <span>Storage & Backup</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* User Profile / Sign In Pill (Always given space and never pushed out) */}
           <div className="shrink-0">
             <UserProfileMenu
               solvedCount={Object.keys(solvedMap).length}
@@ -2186,105 +2312,170 @@ export default function App() {
       </header>
 
       {/* ==================================================================== */}
-      {/* 2. COMPACT MOBILE DOCKED BARS (Total Height 84px) */}
+      {/* 2. COMPACT MOBILE DOCKED BARS (APPLE FROSTED FLUID EXPERIENCE) */}
       {/* ==================================================================== */}
-      <div className="md:hidden shrink-0 bg-[#0f172a] border-b border-slate-800 select-none z-30">
-        {/* Row 1: Brand, Timer, Mastery & Drawer Button */}
-        <div className="flex items-center justify-between px-3 h-11 border-b border-slate-850">
-          <div className="flex items-center gap-1.5">
-            <span className="w-6 h-6 rounded bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-xs">
+      <div className="md:hidden shrink-0 bg-[#080d1a]/95 backdrop-blur-2xl border-b border-white/[0.08] select-none z-30">
+        {/* Row 1: Brand, Segmented View Switcher & User Profile Menu */}
+        <div className="flex items-center justify-between px-2.5 sm:px-3 h-12 border-b border-white/[0.06] gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="w-6.5 h-6.5 rounded-lg bg-gradient-to-tr from-indigo-500 via-indigo-600 to-cyan-400 flex items-center justify-center text-white font-black text-[11px] shadow-sm">
               SQL
             </span>
-            <span className="font-extrabold text-sm text-white">ApexSQL</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-semibold">
-              #{questionNumber}
-            </span>
+
+            {/* Apple Music Style Mobile Segmented Pill */}
+            <div className="inline-flex items-center p-0.5 bg-slate-950/80 rounded-full border border-white/[0.08] shrink-0 h-7.5 backdrop-blur-md">
+              <button
+                onClick={() => {
+                  setCurrentView('sandbox');
+                  window.location.hash = '#/sandbox';
+                }}
+                className={`px-2 h-full rounded-full text-[11px] font-bold flex items-center gap-1 cursor-pointer transition active:scale-95 ${
+                  currentView === 'sandbox'
+                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Sandbox Workspace"
+              >
+                <span>⚡</span>
+                <span className="hidden xs:inline">Sandbox</span>
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentView('directory');
+                  window.location.hash = '#/questions';
+                }}
+                className={`px-2 h-full rounded-full text-[11px] font-bold flex items-center gap-1 cursor-pointer transition active:scale-95 ${
+                  (currentView as string) === 'directory'
+                    ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Questions Library (1,309)"
+              >
+                <span>📚</span>
+                <span className="hidden xs:inline">Questions</span>
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentView('profile');
+                  window.location.hash = '#/profile';
+                }}
+                className={`px-2 h-full rounded-full text-[11px] font-bold flex items-center gap-1 cursor-pointer transition active:scale-95 ${
+                  (currentView as string) === 'profile'
+                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Profile & Streak Analytics"
+              >
+                <span>📊</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <UserProfileMenu
-              solvedCount={Object.keys(solvedMap).length}
-              masteredCount={masteredList.length}
-              onSyncAll={handleCloudSyncAll}
-              onOpenProfile={() => {
-                setCurrentView('profile');
-                window.location.hash = '#/profile';
-              }}
-            />
-
-            <button
-              onClick={handleToggleTimer}
-              className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-750 text-indigo-300"
-            >
-              ⏱ {formattedTimer}
-            </button>
-
-            <button
-              onClick={() => setIsStorageModalOpen(true)}
-              className="px-2 py-0.5 text-xs font-bold rounded bg-slate-800 border border-slate-700 text-slate-200"
-              title="Storage & Progress"
-            >
-              💾
-            </button>
-
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setIsMobileFilterDrawerOpen(true)}
-              className="px-2.5 py-1 text-xs font-bold rounded bg-indigo-600 text-white flex items-center gap-1 shadow-sm"
+              className="px-2 h-7 rounded-full bg-white/5 hover:bg-white/10 border border-white/[0.08] text-slate-300 text-[11px] font-medium flex items-center gap-1 transition active:scale-95 cursor-pointer"
+              title="Topics & Challenge Modes"
             >
-              Topics ⚙
+              <span>⚙</span>
+              <span className="hidden xs:inline">Topics</span>
             </button>
+
+            {/* Profile Avatar & Menu (Right aligned, never squished) */}
+            <div className="shrink-0">
+              <UserProfileMenu
+                solvedCount={Object.keys(solvedMap).length}
+                masteredCount={masteredList.length}
+                onSyncAll={handleCloudSyncAll}
+                onOpenProfile={() => {
+                  setCurrentView('profile');
+                  window.location.hash = '#/profile';
+                }}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Row 2: View Switcher (Problem vs Editor) + Quick Steppers */}
-        <div className="flex items-center justify-between px-3 h-10 bg-slate-900/90 text-xs">
-          <div className="inline-flex rounded-lg bg-slate-850 p-0.5 border border-slate-750">
-            <button
-              onClick={() => setMobileView('problem')}
-              className={`px-3 py-1 font-semibold rounded-md transition ${
-                mobileView === 'problem'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Problem & Schema
-            </button>
-            <button
-              onClick={() => setMobileView('editor')}
-              className={`px-3 py-1 font-semibold rounded-md transition ${
-                mobileView === 'editor'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              SQL Editor & Console
-            </button>
-          </div>
+        {/* Row 2: View Switcher (Problem vs Editor) + Quick Steppers (when in sandbox) */}
+        {currentView === 'sandbox' && (
+          <div className="flex items-center justify-between px-2.5 sm:px-3 h-10 bg-slate-950/60 backdrop-blur-md text-xs gap-1.5 overflow-x-auto no-scrollbar">
+            {/* Problem vs Editor Segmented Pill */}
+            <div className="inline-flex rounded-full bg-slate-900/90 p-0.5 border border-white/[0.08] shrink-0">
+              <button
+                onClick={() => setMobileView('problem')}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-full transition active:scale-95 ${
+                  mobileView === 'problem'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Problem
+              </button>
+              <button
+                onClick={() => setMobileView('editor')}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-full transition active:scale-95 ${
+                  mobileView === 'editor'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Editor
+              </button>
+            </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handlePrevQuestion}
-              className="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold"
-              title="Previous Question"
-            >
-              ◀
-            </button>
-            <button
-              onClick={handleNextQuestion}
-              className="px-2.5 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 font-bold"
-              title="Next Question"
-            >
-              Next ▶
-            </button>
-            <button
-              onClick={handleShuffle}
-              className="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold"
-              title="Shuffle"
-            >
-              🔀
-            </button>
+            {/* Stepper + Timer + Storage Cluster */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center bg-slate-900/80 border border-white/[0.08] rounded-full p-0.5 shadow-xs">
+                <button
+                  onClick={handlePrevQuestion}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] text-slate-400 hover:text-white transition active:scale-95"
+                  title="Previous Question"
+                >
+                  ◀
+                </button>
+                <span className="text-[11px] font-mono font-bold text-slate-200 px-1.5 whitespace-nowrap">
+                  #{questionNumber}
+                </span>
+                <button
+                  onClick={handleNextQuestion}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] text-slate-400 hover:text-white transition active:scale-95"
+                  title="Next Question"
+                >
+                  ▶
+                </button>
+                <button
+                  onClick={handleShuffle}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-slate-400 hover:text-white transition active:scale-95"
+                  title="Randomize Question"
+                >
+                  🔀
+                </button>
+              </div>
+
+              {/* Mobile Timer */}
+              <button
+                onClick={handleToggleTimer}
+                className={`font-mono text-[11px] font-bold px-2 h-7 rounded-full flex items-center gap-1 transition active:scale-95 cursor-pointer whitespace-nowrap ${
+                  isTimerRunning
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                    : 'bg-white/5 border border-white/[0.08] text-slate-300 hover:text-white'
+                }`}
+                title={isTimerRunning ? 'Timer active - click to pause' : 'Timer paused - click to start'}
+              >
+                <span>⏱</span>
+                <span>{formattedTimer}</span>
+              </button>
+
+              <button
+                onClick={() => setIsStorageModalOpen(true)}
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 border border-white/[0.08] text-slate-300 flex items-center justify-center text-xs transition active:scale-95 cursor-pointer"
+                title="Storage & Progress"
+              >
+                💾
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
 
