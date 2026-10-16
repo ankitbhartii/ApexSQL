@@ -926,34 +926,6 @@ export default function App() {
   const [aiDebugAnalysis, setAiDebugAnalysis] = useState<AIDebugAnalysis | null>(null);
   const [isAnalyzingError, setIsAnalyzingError] = useState<boolean>(false);
 
-  const handleTriggerAIDebugger = useCallback(async () => {
-    setIsAIDebuggerOpen(true);
-    setIsAnalyzingError(true);
-    try {
-      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
-      const analysis = await explainErrorWithAI(
-        sqlCode,
-        problem,
-        errType,
-        submissionVerdict?.message || executionResult?.message,
-        executionResult?.diffReport
-      );
-      setAiDebugAnalysis(analysis);
-    } catch {
-      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
-      const fallback = analyzeErrorDeterministically(
-        sqlCode,
-        problem,
-        errType,
-        submissionVerdict?.message || executionResult?.message,
-        executionResult?.diffReport
-      );
-      setAiDebugAnalysis(fallback);
-    } finally {
-      setIsAnalyzingError(false);
-    }
-  }, [sqlCode, problem, submissionVerdict, executionResult]);
-
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
@@ -1063,6 +1035,34 @@ export default function App() {
   });
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+
+  const handleTriggerAIDebugger = useCallback(async () => {
+    setIsAIDebuggerOpen(true);
+    setIsAnalyzingError(true);
+    try {
+      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
+      const analysis = await explainErrorWithAI(
+        sqlCode,
+        problem,
+        errType,
+        submissionVerdict?.message || executionResult?.message,
+        executionResult?.diffReport
+      );
+      setAiDebugAnalysis(analysis);
+    } catch {
+      const errType = submissionVerdict?.type === 'compile_error' ? 'compile_error' : 'wrong';
+      const fallback = analyzeErrorDeterministically(
+        sqlCode,
+        problem,
+        errType,
+        submissionVerdict?.message || executionResult?.message,
+        executionResult?.diffReport
+      );
+      setAiDebugAnalysis(fallback);
+    } finally {
+      setIsAnalyzingError(false);
+    }
+  }, [sqlCode, problem, submissionVerdict, executionResult]);
 
   // LeetCode Console Tabs: 'result' | 'expected' | 'testcase' | 'complexity'
   type ConsoleTabType = 'result' | 'expected' | 'testcase' | 'complexity';
