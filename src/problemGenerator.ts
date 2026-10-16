@@ -532,7 +532,7 @@ function generateIntermediateCase(qNum: number, domain: IndustryDomain, mode: Mo
 
 // 5. Intermediate: GROUP BY & HAVING
 function generateAggregations(qNum: number, domain: IndustryDomain, mode: Mode): SqlProblem {
-  const minTransactions = pick([3, 5, 8], qNum);
+  const minTransactions = 3;
   const minRevenue = ((qNum * 19) % 5000) + 2000;
   const targetTable = `${domain.toLowerCase()}_sales`;
 
