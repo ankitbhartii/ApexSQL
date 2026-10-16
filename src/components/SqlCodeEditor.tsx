@@ -4,7 +4,18 @@
  */
 
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import Editor, { Monaco, OnMount } from '@monaco-editor/react';
 import alasql from 'alasql';
+import {
+  Maximize2,
+  Minimize2,
+  Copy,
+  Check,
+  RotateCcw,
+  Sparkles,
+  Trash2,
+  Code2
+} from 'lucide-react';
 
 // ============================================================================
 // SQL KEYWORDS & FUNCTIONS DICTIONARIES
@@ -38,49 +49,6 @@ export interface SyntaxDiagnostic {
   message?: string;
   line?: number;
   column?: number;
-}
-
-// Tokenize SQL query into colored tokens for the overlay
-export interface SqlToken {
-  type: 'keyword' | 'function' | 'string' | 'number' | 'comment' | 'operator' | 'punctuation' | 'identifier' | 'whitespace';
-  text: string;
-}
-
-export function tokenizeSql(sql: string): SqlToken[] {
-  const tokens: SqlToken[] = [];
-  const regex = /(--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`[^`]*`|\[[^\]]*\]|\b\d+(?:\.\d+)?\b|[a-zA-Z_][a-zA-Z0-9_]*|!=|<=|>=|<>|\|\||[+*\-\/%<>=,;().]|\s+|[^\s\w])/g;
-
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(sql)) !== null) {
-    const text = match[0];
-
-    if (/^--|^\/\*/.test(text)) {
-      tokens.push({ type: 'comment', text });
-    } else if (/^['"]/.test(text)) {
-      tokens.push({ type: 'string', text });
-    } else if (/^\d/.test(text)) {
-      tokens.push({ type: 'number', text });
-    } else if (/^\s+$/.test(text)) {
-      tokens.push({ type: 'whitespace', text });
-    } else if (/^[`\[]/.test(text)) {
-      tokens.push({ type: 'identifier', text });
-    } else if (/^[+*\-\/%<>=!|]/.test(text)) {
-      tokens.push({ type: 'operator', text });
-    } else if (/^[(),;.]/.test(text)) {
-      tokens.push({ type: 'punctuation', text });
-    } else {
-      const upper = text.toUpperCase();
-      if (SQL_KEYWORDS.has(upper)) {
-        tokens.push({ type: 'keyword', text });
-      } else if (SQL_FUNCTIONS.has(upper)) {
-        tokens.push({ type: 'function', text });
-      } else {
-        tokens.push({ type: 'identifier', text });
-      }
-    }
-  }
-
-  return tokens;
 }
 
 // Real-time syntax validation
@@ -128,7 +96,7 @@ export function checkSqlSyntax(code: string): SyntaxDiagnostic {
     return { isValid: false, message: 'Syntax error: Unclosed identifier/string (missing closing ")' };
   }
 
-  // 3. Check incomplete clauses at tail (e.g. `SELECT * FOR`, `SELECT * FROM`, `WHERE`, `ORDER BY`)
+  // 3. Check incomplete clauses at tail
   const cleanTail = code.replace(/--[^\n]*/g, '').replace(/;?\s*$/, '').trim();
   const trailingKeywordMatch = cleanTail.match(/\b(SELECT|FROM|WHERE|JOIN|ON|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|FOR|SET|INTO|VALUES|AND|OR)\s*$/i);
   if (trailingKeywordMatch) {
@@ -145,7 +113,6 @@ export function checkSqlSyntax(code: string): SyntaxDiagnostic {
     (alasql as any).parse(sanitized);
   } catch (err: any) {
     const errMsg = err?.message || 'SQL parse error';
-    // Format error message to be concise and readable
     const matchLine = errMsg.match(/line\s+(\d+)/i);
     const lineNum = matchLine ? parseInt(matchLine[1], 10) : undefined;
     return {
@@ -158,7 +125,7 @@ export function checkSqlSyntax(code: string): SyntaxDiagnostic {
   return { isValid: true, message: 'Valid SQL Syntax' };
 }
 
-interface SqlCodeEditorProps {
+export interface SqlCodeEditorProps {
   value: string;
   onChange: (value: string) => void;
   onRun: () => void;
@@ -166,24 +133,27 @@ interface SqlCodeEditorProps {
   placeholder?: string;
   height?: string;
   dialect?: string;
+  schemas?: { tableName: string; columns: { name: string; type: string }[] }[];
+  onReset?: () => void;
 }
 
-// Shared pixel-perfect font metrics between transparent textarea and highlighted pre/code layer
-const EDITOR_FONT_STYLE: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', Consolas, ui-monospace, monospace",
-  fontSize: '13px',
-  lineHeight: '24px',
-  letterSpacing: '0px',
-  wordSpacing: '0px',
-  tabSize: 2,
-  fontVariantLigatures: 'none',
-  WebkitFontSmoothing: 'antialiased',
-  MozOsxFontSmoothing: 'grayscale',
-  boxSizing: 'border-box',
-  padding: '12px',
-  margin: '0px',
-  border: '0px',
-};
+export function formatSqlQuery(sql: string): string {
+  const keywords = [
+    'WITH', 'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT',
+    'UNION ALL', 'UNION', 'INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'FULL OUTER JOIN',
+    'JOIN', 'ON', 'AND', 'OR', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
+  ];
+  let cleaned = sql.replace(/\s+/g, ' ').trim();
+  keywords.forEach((kw) => {
+    const regex = new RegExp(`\\b${kw}\\b`, 'gi');
+    cleaned = cleaned.replace(regex, `\n${kw}`);
+  });
+  return cleaned
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
 
 export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
   value,
@@ -193,261 +163,397 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
   placeholder = '-- Write your SQL query here...',
   height = 'h-72',
   dialect = 'PostgreSQL',
+  schemas = [],
+  onReset
 }) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const preRef = useRef<HTMLPreElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<any>(null);
+  const monacoRef = useRef<Monaco | null>(null);
+  const onRunRef = useRef(onRun);
+  const onSubmitRef = useRef(onSubmit);
+  const schemasRef = useRef(schemas);
 
-  const [cursorLine, setCursorLine] = useState<number>(1);
+  useEffect(() => {
+    onRunRef.current = onRun;
+    onSubmitRef.current = onSubmit;
+    schemasRef.current = schemas;
+  });
 
-  // Synchronize scrolling between textarea, pre highlighter, and line numbers
-  const handleScroll = () => {
-    if (!textareaRef.current) return;
-    const { scrollTop, scrollLeft } = textareaRef.current;
-    if (preRef.current) {
-      preRef.current.scrollTop = scrollTop;
-      preRef.current.scrollLeft = scrollLeft;
+  const [cursorPos, setCursorPos] = useState<{ line: number; col: number }>({ line: 1, col: 1 });
+  const [copied, setCopied] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [syntaxCheck, setSyntaxCheck] = useState<SyntaxDiagnostic>({ isValid: true, message: 'Valid SQL Syntax' });
+
+  // Update syntax checking and Monaco error squiggles
+  const validateSyntax = useCallback((code: string) => {
+    const diagnostic = checkSqlSyntax(code);
+    setSyntaxCheck(diagnostic);
+
+    if (monacoRef.current && editorRef.current) {
+      const model = editorRef.current.getModel();
+      if (!model) return;
+
+      if (!diagnostic.isValid && diagnostic.line) {
+        monacoRef.current.editor.setModelMarkers(model, 'alasql', [
+          {
+            startLineNumber: Math.max(1, diagnostic.line),
+            startColumn: 1,
+            endLineNumber: Math.max(1, diagnostic.line),
+            endColumn: model.getLineMaxColumn(Math.max(1, diagnostic.line)),
+            message: diagnostic.message || 'SQL Syntax Error',
+            severity: monacoRef.current.MarkerSeverity.Error,
+          },
+        ]);
+      } else {
+        monacoRef.current.editor.setModelMarkers(model, 'alasql', []);
+      }
     }
-    if (lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = scrollTop;
+  }, []);
+
+  // Debounced syntax validation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      validateSyntax(value);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [value, validateSyntax]);
+
+  // Monaco onMount configuration
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    // Define 100% LeetCode Dark theme
+    monaco.editor.defineTheme('leetcode-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'keyword.sql', foreground: '38bdf8', fontStyle: 'bold' },
+        { token: 'predefined.sql', foreground: 'c084fc', fontStyle: 'bold' },
+        { token: 'string.sql', foreground: '4ade80' },
+        { token: 'number.sql', foreground: 'fb923c' },
+        { token: 'comment.sql', foreground: '64748b', fontStyle: 'italic' },
+        { token: 'operator.sql', foreground: '94a3b8' },
+        { token: 'delimiter.sql', foreground: '94a3b8' },
+        { token: 'identifier.sql', foreground: 'e2e8f0' },
+      ],
+      colors: {
+        'editor.background': '#070b14',
+        'editor.foreground': '#e2e8f0',
+        'editor.lineHighlightBackground': '#0f172a50',
+        'editorLineNumber.foreground': '#475569',
+        'editorLineNumber.activeForeground': '#38bdf8',
+        'editorCursor.foreground': '#38bdf8',
+        'editor.selectionBackground': '#4338ca55',
+        'editor.inactiveSelectionBackground': '#312e8140',
+        'editorIndentGuide.background1': '#1e293b',
+        'editorIndentGuide.activeBackground1': '#38bdf840',
+        'editorBracketMatch.background': '#1e293b',
+        'editorBracketMatch.border': '#38bdf8',
+      },
+    });
+
+    monaco.editor.setTheme('leetcode-dark');
+
+    // Register LeetCode keyboard shortcuts (Ctrl+Enter to Run, Ctrl+Shift+Enter to Submit)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      onRunRef.current();
+    });
+
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
+      onSubmitRef.current();
+    });
+
+    // Track cursor line & column
+    editor.onDidChangeCursorPosition((e: any) => {
+      setCursorPos({ line: e.position.lineNumber, col: e.position.column });
+    });
+
+    // Register Document Formatting Provider (Shift+Alt+F)
+    monaco.languages.registerDocumentFormattingEditProvider('sql', {
+      provideDocumentFormattingEdits: (model: any) => {
+        const formatted = formatSqlQuery(model.getValue());
+        return [
+          {
+            range: model.getFullModelRange(),
+            text: formatted,
+          },
+        ];
+      },
+    });
+
+    // Register Custom SQL IntelliSense Autocomplete
+    monaco.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: [' ', '.', '(', ','],
+      provideCompletionItems: (model: any, position: any) => {
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
+
+        const suggestions: any[] = [];
+
+        // 1. SQL Keywords with Snippets
+        const keywordsList = [
+          { label: 'SELECT', insertText: 'SELECT ${1:*}\nFROM ${2:table_name};', detail: 'SELECT query snippet', isSnippet: true },
+          { label: 'FROM', insertText: 'FROM ', detail: 'FROM clause' },
+          { label: 'WHERE', insertText: 'WHERE ', detail: 'WHERE predicate' },
+          { label: 'JOIN', insertText: 'JOIN ${1:table} ON ${2:condition}', detail: 'INNER JOIN clause', isSnippet: true },
+          { label: 'LEFT JOIN', insertText: 'LEFT JOIN ${1:table} ON ${2:condition}', detail: 'LEFT OUTER JOIN clause', isSnippet: true },
+          { label: 'GROUP BY', insertText: 'GROUP BY ', detail: 'GROUP BY clause' },
+          { label: 'ORDER BY', insertText: 'ORDER BY ${1:column} ${2|ASC,DESC|}', detail: 'ORDER BY clause', isSnippet: true },
+          { label: 'HAVING', insertText: 'HAVING ', detail: 'HAVING aggregate filter' },
+          { label: 'LIMIT', insertText: 'LIMIT ', detail: 'LIMIT clause' },
+          { label: 'WITH', insertText: 'WITH ${1:cte_name} AS (\n  ${2:SELECT * FROM table}\n)\nSELECT * FROM ${1:cte_name};', detail: 'Common Table Expression (CTE)', isSnippet: true },
+          { label: 'CASE WHEN', insertText: 'CASE\n  WHEN ${1:condition} THEN ${2:result}\n  ELSE ${3:fallback}\nEND', detail: 'CASE conditional expression', isSnippet: true },
+          { label: 'OVER (PARTITION BY)', insertText: 'OVER (\n  PARTITION BY ${1:column}\n  ORDER BY ${2:column}\n)', detail: 'Window function OVER clause', isSnippet: true },
+          { label: 'UNION ALL', insertText: 'UNION ALL\n', detail: 'UNION ALL combinator' },
+          { label: 'DISTINCT', insertText: 'DISTINCT ', detail: 'DISTINCT qualifier' },
+        ];
+
+        keywordsList.forEach((kw) => {
+          suggestions.push({
+            label: kw.label,
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: kw.insertText,
+            insertTextRules: kw.isSnippet ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
+            detail: kw.detail,
+            range,
+          });
+        });
+
+        // 2. Built-in SQL Functions
+        const functionsList = [
+          { label: 'COUNT()', insertText: 'COUNT(${1:*})', detail: 'Count aggregate function' },
+          { label: 'SUM()', insertText: 'SUM(${1:column})', detail: 'Sum aggregate function' },
+          { label: 'AVG()', insertText: 'AVG(${1:column})', detail: 'Average aggregate function' },
+          { label: 'ROUND()', insertText: 'ROUND(${1:val}, ${2:2})', detail: 'Round numeric value' },
+          { label: 'COALESCE()', insertText: 'COALESCE(${1:val}, ${2:default_val})', detail: 'First non-null value' },
+          { label: 'ROW_NUMBER()', insertText: 'ROW_NUMBER() OVER (ORDER BY ${1:col})', detail: 'Window row number ranking' },
+          { label: 'DENSE_RANK()', insertText: 'DENSE_RANK() OVER (ORDER BY ${1:col})', detail: 'Window dense rank without gaps' },
+          { label: 'RANK()', insertText: 'RANK() OVER (ORDER BY ${1:col})', detail: 'Window rank with rank gaps' },
+          { label: 'LAG()', insertText: 'LAG(${1:col}) OVER (ORDER BY ${2:col})', detail: 'Value from preceding row' },
+          { label: 'LEAD()', insertText: 'LEAD(${1:col}) OVER (ORDER BY ${2:col})', detail: 'Value from following row' },
+          { label: 'DATEDIFF()', insertText: 'DATEDIFF(${1:date1}, ${2:date2})', detail: 'Difference between two dates' },
+          { label: 'CONCAT()', insertText: 'CONCAT(${1:str1}, ${2:str2})', detail: 'Concatenate strings' },
+        ];
+
+        functionsList.forEach((fn) => {
+          suggestions.push({
+            label: fn.label,
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: fn.insertText,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: fn.detail,
+            range,
+          });
+        });
+
+        // 3. Schema-Aware Table & Column IntelliSense for current problem
+        const currentSchemas = schemasRef.current || [];
+        currentSchemas.forEach((t) => {
+          suggestions.push({
+            label: t.tableName,
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: t.tableName,
+            detail: `Table (${t.columns.length} columns)`,
+            documentation: `Columns: ${t.columns.map((c) => `${c.name} (${c.type})`).join(', ')}`,
+            range,
+          });
+
+          t.columns.forEach((col) => {
+            suggestions.push({
+              label: col.name,
+              kind: monaco.languages.CompletionItemKind.Field,
+              insertText: col.name,
+              detail: `${t.tableName}.${col.name} : ${col.type}`,
+              range,
+            });
+          });
+        });
+
+        return { suggestions };
+      },
+    });
+
+    // Run initial syntax validation
+    validateSyntax(value);
+  };
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback
     }
   };
 
-  // Update cursor line for active line highlighting
-  const updateCursorLine = () => {
-    if (!textareaRef.current) return;
-    const textUpToCursor = value.substring(0, textareaRef.current.selectionStart);
-    const currentLine = textUpToCursor.split('\n').length;
-    setCursorLine(currentLine);
+  const handleFormatCode = () => {
+    if (editorRef.current) {
+      const model = editorRef.current.getModel();
+      if (model) {
+        const formatted = formatSqlQuery(model.getValue());
+        editorRef.current.executeEdits('sql-formatter', [
+          {
+            range: model.getFullModelRange(),
+            text: formatted,
+            forceMoveMarkers: true,
+          },
+        ]);
+        onChange(formatted);
+      }
+    }
   };
 
-  // Generate line numbers array
-  const lineCount = useMemo(() => {
-    const count = value.split('\n').length;
-    return Math.max(count, 8);
-  }, [value]);
-
-  const lineNumbers = useMemo(() => {
-    return Array.from({ length: lineCount }, (_, i) => i + 1);
-  }, [lineCount]);
-
-  // Real-time syntax tokens for color rendering
-  const tokens = useMemo(() => {
-    return tokenizeSql(value);
-  }, [value]);
-
-  // Real-time syntax check
-  const syntaxCheck = useMemo(() => {
-    return checkSqlSyntax(value);
-  }, [value]);
-
-  // Keydown handler: Tab indentation, auto-pairing brackets, shortcuts
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    // Ctrl+Enter or Cmd+Enter -> Run Query (LeetCode shortcut)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      if (e.shiftKey) {
-        onSubmit();
-      } else {
-        onRun();
-      }
-      return;
-    }
-
-    // Tab key -> Insert 2 spaces
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-
-      if (!e.shiftKey) {
-        // Indent
-        const updated = value.substring(0, start) + '  ' + value.substring(end);
-        onChange(updated);
-        setTimeout(() => {
-          textarea.setSelectionRange(start + 2, start + 2);
-        }, 0);
-      } else {
-        // Shift+Tab -> Dedent current line
-        const beforeCursor = value.substring(0, start);
-        const lastNewline = beforeCursor.lastIndexOf('\n');
-        const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
-        const lineText = value.substring(lineStart, start);
-
-        if (lineText.startsWith('  ')) {
-          const updated = value.substring(0, lineStart) + value.substring(lineStart + 2);
-          onChange(updated);
-          setTimeout(() => {
-            textarea.setSelectionRange(Math.max(lineStart, start - 2), Math.max(lineStart, end - 2));
-          }, 0);
-        }
-      }
-      return;
-    }
-
-    // Auto-close brackets & quotes
-    const pairs: Record<string, string> = {
-      '(': ')',
-      '[': ']',
-      '{': '}',
-      "'": "'",
-      '"': '"',
-      '`': '`',
-    };
-
-    if (pairs[e.key]) {
-      const closing = pairs[e.key];
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-
-      // If user selected text, wrap it with pair
-      if (start !== end) {
-        e.preventDefault();
-        const selected = value.substring(start, end);
-        const updated = value.substring(0, start) + e.key + selected + closing + value.substring(end);
-        onChange(updated);
-        setTimeout(() => {
-          textarea.setSelectionRange(start + 1, end + 1);
-        }, 0);
-        return;
-      }
+  const handleClear = () => {
+    onChange('');
+    if (editorRef.current) {
+      editorRef.current.focus();
     }
   };
 
   return (
-    <div className="flex flex-col bg-[#070b14] border border-slate-800 rounded-xl overflow-hidden shadow-2xl relative">
-      {/* Editor Body: Line Numbers + Overlay Tokenizer */}
-      <div className={`relative flex ${height} min-h-[180px] overflow-hidden`}>
-        {/* Line Numbers Column (Clean dark gray, synced scroll) */}
-        <div
-          ref={lineNumbersRef}
-          style={{
-            fontFamily: "'JetBrains Mono', Consolas, ui-monospace, monospace",
-            fontSize: '13px',
-            lineHeight: '24px',
-            boxSizing: 'border-box',
-            paddingTop: '12px',
-            paddingBottom: '12px',
-          }}
-          className="w-11 bg-[#090d18] text-slate-600 select-none px-2 text-right border-r border-slate-800/80 overflow-hidden shrink-0"
-        >
-          {lineNumbers.map((num) => (
-            <div
-              key={num}
-              style={{ lineHeight: '24px' }}
-              className={`transition-colors ${
-                num === cursorLine ? 'text-cyan-400 font-bold' : 'text-slate-600'
-              }`}
+    <div
+      className={`flex flex-col bg-[#070b14] border border-slate-800 rounded-xl overflow-hidden shadow-2xl relative transition-all duration-300 ${
+        isExpanded ? 'fixed inset-4 z-50 h-[calc(100vh-2rem)]' : ''
+      }`}
+    >
+      {/* 1. LeetCode IDE Top Toolbar */}
+      <div className="flex items-center justify-between px-3 py-2 bg-[#090d18] border-b border-slate-800/80 text-xs select-none">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 font-mono text-cyan-300 font-bold text-[11px] shadow-xs">
+            <Code2 className="w-3.5 h-3.5 text-cyan-400" />
+            <span>{dialect}</span>
+          </div>
+
+          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+
+          {/* Format Query Button */}
+          <button
+            onClick={handleFormatCode}
+            className="px-2 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+            title="Format SQL query"
+          >
+            <Sparkles className="w-3 h-3 text-cyan-400" />
+            <span className="hidden sm:inline">Format</span>
+          </button>
+
+          {/* Reset to starter code */}
+          {onReset && (
+            <button
+              onClick={onReset}
+              className="px-2 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+              title="Reset query to starter code"
             >
-              {num}
-            </div>
-          ))}
+              <RotateCcw className="w-3 h-3 text-amber-400" />
+              <span className="hidden sm:inline">Reset</span>
+            </button>
+          )}
+
+          {/* Clear Button */}
+          <button
+            onClick={handleClear}
+            className="px-2 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-rose-400 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+            title="Clear editor contents"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span className="hidden sm:inline">Clear</span>
+          </button>
         </div>
 
-        {/* Editor Stage: Underlying Syntax Highlighter + Transparent Textarea */}
-        <div className="relative flex-1 overflow-hidden">
-          {/* Active Line Highlight Indicator */}
-          <div
-            className="absolute left-0 right-0 pointer-events-none bg-slate-800/25 border-y border-cyan-500/10 transition-all duration-75"
-            style={{
-              top: `${(cursorLine - 1) * 24 + 12}px`,
-              height: '24px',
-            }}
-          />
-
-          {/* Real-time Syntax Highlight Layer (<pre><code>) */}
-          <pre
-            ref={preRef}
-            aria-hidden="true"
-            style={EDITOR_FONT_STYLE}
-            className="absolute inset-0 pointer-events-none select-none overflow-hidden whitespace-pre z-10 text-slate-100"
+        {/* Right Toolbar Actions: Copy, Fullscreen */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleCopyCode}
+            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition cursor-pointer"
+            title="Copy SQL code to clipboard"
           >
-            <code style={{ fontFamily: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', letterSpacing: 'inherit', wordSpacing: 'inherit', fontVariantLigatures: 'none' }}>
-              {value ? (
-                tokens.map((token, idx) => {
-                  switch (token.type) {
-                    case 'keyword':
-                      // Exact sky-blue/cyan matching the user's uploaded screenshot (#38bdf8)
-                      return (
-                        <span key={idx} className="text-[#38bdf8] font-bold">
-                          {token.text}
-                        </span>
-                      );
-                    case 'function':
-                      return (
-                        <span key={idx} className="text-[#c084fc] font-semibold">
-                          {token.text}
-                        </span>
-                      );
-                    case 'string':
-                      return (
-                        <span key={idx} className="text-[#4ade80]">
-                          {token.text}
-                        </span>
-                      );
-                    case 'number':
-                      return (
-                        <span key={idx} className="text-[#fb923c] font-semibold">
-                          {token.text}
-                        </span>
-                      );
-                    case 'comment':
-                      return (
-                        <span key={idx} className="text-slate-500 italic">
-                          {token.text}
-                        </span>
-                      );
-                    case 'operator':
-                      return (
-                        <span key={idx} className="text-slate-300">
-                          {token.text}
-                        </span>
-                      );
-                    case 'punctuation':
-                      return (
-                        <span key={idx} className="text-slate-400">
-                          {token.text}
-                        </span>
-                      );
-                    default:
-                      return <span key={idx}>{token.text}</span>;
-                  }
-                })
-              ) : (
-                <span className="text-slate-600 italic">{placeholder}</span>
-              )}
-            </code>
-          </pre>
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+          </button>
 
-          {/* Interactive Textarea (Transparent text, visible caret) */}
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => {
-              onChange(e.target.value);
-              updateCursorLine();
-            }}
-            onKeyDown={handleKeyDown}
-            onClick={updateCursorLine}
-            onKeyUp={updateCursorLine}
-            onScroll={handleScroll}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoComplete="off"
-            autoCorrect="off"
-            style={EDITOR_FONT_STYLE}
-            className="absolute inset-0 w-full h-full bg-transparent resize-none focus:outline-none focus:ring-0 z-20 selection:bg-indigo-600/40 selection:text-transparent overflow-y-auto overflow-x-auto whitespace-pre text-transparent caret-cyan-400"
-            placeholder=""
-          />
+          <button
+            onClick={() => setIsExpanded((prev) => !prev)}
+            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition cursor-pointer"
+            title={isExpanded ? 'Exit Fullscreen' : 'Expand Editor to Fullscreen'}
+          >
+            {isExpanded ? (
+              <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
+            ) : (
+              <Maximize2 className="w-3.5 h-3.5" />
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Editor Status Footer: Real-time Syntax Diagnostic + Keyboard Shortcut Pills */}
+      {/* 2. Monaco Editor Container */}
+      <div className={`relative ${isExpanded ? 'flex-1' : height} min-h-[200px] w-full`}>
+        <Editor
+          height="100%"
+          defaultLanguage="sql"
+          language="sql"
+          value={value}
+          onChange={(val) => onChange(val || '')}
+          onMount={handleEditorDidMount}
+          theme="leetcode-dark"
+          options={{
+            fontSize: 13,
+            fontFamily: "'JetBrains Mono', Consolas, 'Courier New', monospace",
+            fontLigatures: false,
+            lineHeight: 24,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+            automaticLayout: true,
+            lineNumbers: 'on',
+            lineNumbersMinChars: 3,
+            glyphMargin: false,
+            folding: true,
+            renderLineHighlight: 'all',
+            cursorBlinking: 'smooth',
+            cursorSmoothCaretAnimation: 'on',
+            cursorStyle: 'line',
+            cursorWidth: 2,
+            tabSize: 2,
+            insertSpaces: true,
+            padding: { top: 12, bottom: 12 },
+            overviewRulerLanes: 0,
+            hideCursorInOverviewRuler: true,
+            scrollbar: {
+              vertical: 'visible',
+              horizontal: 'visible',
+              verticalScrollbarSize: 8,
+              horizontalScrollbarSize: 8,
+              useShadows: false,
+            },
+            suggest: {
+              showKeywords: true,
+              showSnippets: true,
+              showFunctions: true,
+              preview: true,
+            },
+            quickSuggestions: { other: true, comments: false, strings: false },
+            contextmenu: true,
+          }}
+          loading={
+            <div className="flex items-center justify-center h-full bg-[#070b14] text-slate-500 font-mono text-xs gap-2">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+              <span>Loading Monaco SQL Engine...</span>
+            </div>
+          }
+        />
+      </div>
+
+      {/* 3. LeetCode Editor Status Footer */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-[#090d18] border-t border-slate-800 text-[11px] text-slate-400 shrink-0 select-none">
-        {/* Left: Syntax Diagnostic */}
+        {/* Left: Syntax Diagnostic Indicator */}
         <div className="flex items-center gap-2 overflow-hidden">
           {syntaxCheck.isValid ? (
             <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
@@ -455,24 +561,26 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
               <span>Valid SQL Syntax</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 text-rose-400 font-medium truncate">
+            <div className="flex items-center gap-1.5 text-rose-400 font-medium truncate" title={syntaxCheck.message}>
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
               <span className="truncate">{syntaxCheck.message}</span>
             </div>
           )}
         </div>
 
-        {/* Right: Line / Char Count & Run Shortcut */}
+        {/* Right: Line / Col, Indentation, Shortcut Badges */}
         <div className="flex items-center gap-3 shrink-0 font-mono text-[10px]">
-          <span className="text-slate-500 hidden sm:inline">
-            Ln {cursorLine}, Col {(textareaRef.current?.selectionStart || 0) + 1}
+          <span className="text-slate-400 hidden sm:inline">
+            Ln {cursorPos.line}, Col {cursorPos.col}
           </span>
           <span className="text-slate-600 hidden sm:inline">•</span>
+          <span className="text-slate-500 hidden md:inline">Spaces: 2</span>
+          <span className="text-slate-600 hidden md:inline">•</span>
           <span className="text-slate-400 flex items-center gap-1">
             <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Ctrl</kbd>
             <span>+</span>
             <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Enter</kbd>
-            <span className="text-slate-500">to Run</span>
+            <span className="text-slate-500">Run</span>
           </span>
         </div>
       </div>

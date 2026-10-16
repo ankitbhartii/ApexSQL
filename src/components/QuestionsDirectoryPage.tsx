@@ -17,7 +17,7 @@ import {
 interface QuestionsDirectoryPageProps {
   onSelectProblem: (problem: SqlProblem) => void;
   onBackToSandbox: () => void;
-  solvedMap: Record<string, boolean>;
+  solvedMap: Record<string, any>;
 }
 
 type PlatformFilter = 'all' | 'datadriven' | 'leetcode' | 'hackerrank' | 'stratascratch';
@@ -554,7 +554,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
                     const globalSerial = (safePage - 1) * (pageSize === -1 ? 0 : pageSize) + localIdx + 1;
                     const isSolved = !!solvedMap[q.id];
 
-                    let platformBadge = {
+                    let platformBadge: { text: string; bg: string; icon: string } = {
                       text: q.platform,
                       bg: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
                       icon: '🌐',

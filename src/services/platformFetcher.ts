@@ -79,7 +79,7 @@ export async function fetchPlatformQuestions(
     filtered = filtered.filter((p) => p.difficulty.toLowerCase() === difficulty.toLowerCase());
   }
 
-  const isAll = limit === 'all' || limit === 0 || limit === '0';
+  const isAll = limit === 'all' || limit === 0 || String(limit) === '0';
   const sliced = isAll ? filtered : filtered.slice(0, Math.max(Number(limit) || 5, 1));
 
   return {
