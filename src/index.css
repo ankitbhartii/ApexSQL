@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --font-mono: 'JetBrains Mono', Consolas, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -10,8 +14,8 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  code, pre, kbd, samp, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  code, pre, kbd, samp, textarea, input, .font-mono {
+    font-family: 'JetBrains Mono', Consolas, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace !important;
     font-variant-numeric: tabular-nums;
   }
 }

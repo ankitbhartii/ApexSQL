@@ -168,6 +168,23 @@ interface SqlCodeEditorProps {
   dialect?: string;
 }
 
+// Shared pixel-perfect font metrics between transparent textarea and highlighted pre/code layer
+const EDITOR_FONT_STYLE: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', Consolas, ui-monospace, monospace",
+  fontSize: '13px',
+  lineHeight: '24px',
+  letterSpacing: '0px',
+  wordSpacing: '0px',
+  tabSize: 2,
+  fontVariantLigatures: 'none',
+  WebkitFontSmoothing: 'antialiased',
+  MozOsxFontSmoothing: 'grayscale',
+  boxSizing: 'border-box',
+  padding: '12px',
+  margin: '0px',
+  border: '0px',
+};
+
 export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
   value,
   onChange,
@@ -307,12 +324,21 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
         {/* Line Numbers Column (Clean dark gray, synced scroll) */}
         <div
           ref={lineNumbersRef}
-          className="w-11 bg-[#090d18] text-slate-600 select-none py-3 px-2 text-right font-mono text-xs border-r border-slate-800/80 overflow-hidden shrink-0"
+          style={{
+            fontFamily: "'JetBrains Mono', Consolas, ui-monospace, monospace",
+            fontSize: '13px',
+            lineHeight: '24px',
+            boxSizing: 'border-box',
+            paddingTop: '12px',
+            paddingBottom: '12px',
+          }}
+          className="w-11 bg-[#090d18] text-slate-600 select-none px-2 text-right border-r border-slate-800/80 overflow-hidden shrink-0"
         >
           {lineNumbers.map((num) => (
             <div
               key={num}
-              className={`leading-6 transition-colors ${
+              style={{ lineHeight: '24px' }}
+              className={`transition-colors ${
                 num === cursorLine ? 'text-cyan-400 font-bold' : 'text-slate-600'
               }`}
             >
@@ -336,9 +362,10 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
           <pre
             ref={preRef}
             aria-hidden="true"
-            className="absolute inset-0 pointer-events-none select-none font-mono text-xs lg:text-sm p-3 leading-6 m-0 overflow-hidden whitespace-pre z-10 box-border text-slate-100"
+            style={EDITOR_FONT_STYLE}
+            className="absolute inset-0 pointer-events-none select-none overflow-hidden whitespace-pre z-10 text-slate-100"
           >
-            <code>
+            <code style={{ fontFamily: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', letterSpacing: 'inherit', wordSpacing: 'inherit', fontVariantLigatures: 'none' }}>
               {value ? (
                 tokens.map((token, idx) => {
                   switch (token.type) {
@@ -411,7 +438,8 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
             autoCapitalize="off"
             autoComplete="off"
             autoCorrect="off"
-            className="absolute inset-0 w-full h-full bg-transparent font-mono text-xs lg:text-sm p-3 leading-6 m-0 resize-none focus:outline-none focus:ring-0 z-20 selection:bg-indigo-600/40 selection:text-transparent overflow-y-auto overflow-x-auto whitespace-pre box-border text-transparent caret-cyan-400"
+            style={EDITOR_FONT_STYLE}
+            className="absolute inset-0 w-full h-full bg-transparent resize-none focus:outline-none focus:ring-0 z-20 selection:bg-indigo-600/40 selection:text-transparent overflow-y-auto overflow-x-auto whitespace-pre text-transparent caret-cyan-400"
             placeholder=""
           />
         </div>
