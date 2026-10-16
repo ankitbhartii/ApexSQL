@@ -28,7 +28,7 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
   onToast,
   onOpenDirectory,
 }) => {
-  const [selectedPlatform, setSelectedPlatform] = useState<'all' | 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch'>('all');
+  const [selectedPlatform, setSelectedPlatform] = useState<'all' | 'stackoverflow' | 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch'>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [fetchLimit, setFetchLimit] = useState<number | 'all'>('all');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -132,7 +132,7 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
               <label className="text-xs font-semibold text-slate-300 mb-2 block">
                 1. Select Target Platform:
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
                 {SUPPORTED_PLATFORMS.map((plat) => {
                   const isSelected = selectedPlatform === plat.id;
                   return (
@@ -355,7 +355,7 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
                   className="px-3.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600 border border-cyan-500/40 text-cyan-300 hover:text-white text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1.5"
                 >
                   <span>📚</span>
-                  <span>Browse Question Library (1,309) →</span>
+                  <span>Browse Question Library (11,309) →</span>
                 </button>
               )}
               <button

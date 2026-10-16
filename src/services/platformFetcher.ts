@@ -12,7 +12,7 @@ import {
 } from './platformQuestionsData';
 
 export interface FetchPlatformOptions {
-  platform: 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch' | 'all';
+  platform: 'leetcode' | 'hackerrank' | 'datadriven' | 'stackoverflow' | 'stratascratch' | 'all';
   limit?: number | 'all';
   difficulty?: 'All' | 'Easy' | 'Medium' | 'Hard';
 }
@@ -27,7 +27,7 @@ export interface FetchPlatformResult {
 }
 
 /**
- * Fetches real SQL questions from platforms (LeetCode, HackerRank, DataDriven, StrataScratch)
+ * Fetches real SQL questions from platforms (Stack Overflow, LeetCode, HackerRank, DataDriven, StrataScratch)
  * via the full-stack server endpoint or client-side verified catalog fallback.
  */
 export async function fetchPlatformQuestions(
@@ -64,7 +64,9 @@ export async function fetchPlatformQuestions(
   // Client-side deterministic fallback
   let filtered = AUTHENTIC_PLATFORM_PROBLEMS;
   if (platform !== 'all') {
-    if (platform === 'leetcode') {
+    if (platform === 'stackoverflow') {
+      filtered = filtered.filter((p) => p.platform === 'Stack Overflow');
+    } else if (platform === 'leetcode') {
       filtered = filtered.filter((p) => p.platform === 'LeetCode');
     } else if (platform === 'hackerrank') {
       filtered = filtered.filter((p) => p.platform === 'HackerRank');
