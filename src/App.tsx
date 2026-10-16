@@ -2020,7 +2020,7 @@ export default function App() {
             <select
               value={activeTopic}
               onChange={(e) => handleSelectTopic(e.target.value as TopicCategory)}
-              className="hidden 2xl:block h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer max-w-[140px] truncate whitespace-nowrap shrink-0"
+              className="hidden lg:block h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer max-w-[130px] xl:max-w-[160px] truncate whitespace-nowrap shrink-0"
               title="Filter by SQL Topic"
             >
               {TOPIC_DRILL_CONFIGS.map((t) => (
