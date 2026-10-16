@@ -28,6 +28,7 @@ import { AuthModal } from './components/AuthModal';
 import { PlatformFetchModal } from './components/PlatformFetchModal';
 import { QuestionsDirectoryPage } from './components/QuestionsDirectoryPage';
 import { UserProfileMenu } from './components/UserProfileMenu';
+import { ProfileDashboard } from './components/ProfileDashboard';
 import { SqlCodeEditor } from './components/SqlCodeEditor';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
@@ -899,11 +900,14 @@ export default function App() {
   const [groundedSearchResult, setGroundedSearchResult] = useState<GoogleSearchGroundedPayload | null>(null);
   const [isGoogleSearchPanelOpen, setIsGoogleSearchPanelOpen] = useState<boolean>(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState<boolean>(false);
-  const [currentView, setCurrentView] = useState<'sandbox' | 'directory'>(() => {
+  const [currentView, setCurrentView] = useState<'sandbox' | 'directory' | 'profile'>(() => {
     if (typeof window !== 'undefined') {
       const h = window.location.hash;
       if (h === '#/questions' || h === '#/directory' || h === '#question-library') {
         return 'directory';
+      }
+      if (h === '#/profile' || h === '#/analytics' || h === '#/dashboard') {
+        return 'profile';
       }
     }
     return 'sandbox';
@@ -915,6 +919,8 @@ export default function App() {
       const hash = window.location.hash;
       if (hash === '#/questions' || hash === '#/directory' || hash === '#question-library') {
         setCurrentView('directory');
+      } else if (hash === '#/profile' || hash === '#/analytics' || hash === '#/dashboard') {
+        setCurrentView('profile');
       } else if (hash === '#/sandbox') {
         setCurrentView('sandbox');
       }
@@ -924,6 +930,10 @@ export default function App() {
   }, []);
 
   const handleSelectDirectoryProblem = useCallback((prob: SqlProblem) => {
+    setSubmissionVerdict(null);
+    setExecutionResult(null);
+    safeStorage.removeItem('apex_last_execution_result');
+    safeStorage.removeItem('apex_last_execution_problem_id');
     livePipeline.ingestExternalProblems([prob], prob.platform);
     setLiveProblems(livePipeline.getProblems());
     setSelectedLiveProblemId(prob.id);
@@ -998,11 +1008,15 @@ export default function App() {
     return problem.starterCodeByDialect[dialect] || '';
   });
 
-  // Persisted execution result so it never disappears on refresh
+  // Persisted execution result so it never disappears on refresh (scoped strictly to current problem)
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(() => {
     try {
+      const savedProblemId = safeStorage.getItem('apex_last_execution_problem_id');
       const saved = safeStorage.getItem('apex_last_execution_result');
-      return saved ? JSON.parse(saved) : null;
+      if (saved && savedProblemId === problem.id) {
+        return JSON.parse(saved);
+      }
+      return null;
     } catch {
       return null;
     }
@@ -1114,6 +1128,18 @@ export default function App() {
     }
   }, [problem.id, dialect]);
 
+  // Real-time reset of execution output and submission verdict when switching questions
+  const prevProblemIdRef = useRef<string>(problem.id);
+  useEffect(() => {
+    if (prevProblemIdRef.current !== problem.id) {
+      prevProblemIdRef.current = problem.id;
+      setSubmissionVerdict(null);
+      setExecutionResult(null);
+      safeStorage.removeItem('apex_last_execution_result');
+      safeStorage.removeItem('apex_last_execution_problem_id');
+    }
+  }, [problem.id]);
+
   // Persist live draft code so refreshing never loses typed content
   useEffect(() => {
     safeStorage.setItem('apex_current_sql', sqlCode);
@@ -1148,6 +1174,30 @@ export default function App() {
   useEffect(() => {
     safeStorage.setItem('apex_mobile_view', mobileView);
   }, [mobileView]);
+
+  useEffect(() => {
+    if (Object.keys(solvedMap).length > 0) {
+      safeStorage.setItem('apex_solved_problems', JSON.stringify(solvedMap));
+    }
+  }, [solvedMap]);
+
+  useEffect(() => {
+    if (masteredList.length > 0) {
+      safeStorage.setItem('apex_mastered_problems', JSON.stringify(masteredList));
+    }
+  }, [masteredList]);
+
+  useEffect(() => {
+    if (reviewList.length > 0) {
+      safeStorage.setItem('apex_review_problems', JSON.stringify(reviewList));
+    }
+  }, [reviewList]);
+
+  useEffect(() => {
+    if (Object.keys(notesMap).length > 0) {
+      safeStorage.setItem('apex_problem_notes', JSON.stringify(notesMap));
+    }
+  }, [notesMap]);
 
   useEffect(() => {
     safeStorage.setItem('apex_console_tab', consoleTab);
@@ -1242,51 +1292,67 @@ export default function App() {
     const loadCloudData = async () => {
       try {
         const cloudProgress = await fetchCloudProgress();
-        if (!isMounted || !cloudProgress) return;
+        if (!isMounted) return;
 
-        if (cloudProgress.solvedProblems && cloudProgress.solvedProblems.length > 0) {
-          setSolvedMap((prev) => {
-            const merged = { ...prev };
-            cloudProgress.solvedProblems.forEach((id) => {
-              if (!merged[id]) {
-                merged[id] = { status: 'ACCEPTED', timestamp: Date.now() };
-              }
-            });
-            safeStorage.setItem('apex_solved_problems', JSON.stringify(merged));
-            return merged;
+        // 1. Solved Problems: Bidirectional union between Cloud and Local Storage
+        const localSolvedRaw = safeStorage.getItem('apex_solved_problems');
+        const localSolvedObj: Record<string, { status: string; timestamp: number }> = localSolvedRaw
+          ? JSON.parse(localSolvedRaw)
+          : {};
+
+        const mergedSolved: Record<string, { status: string; timestamp: number }> = { ...localSolvedObj };
+        if (cloudProgress?.solvedProblems && Array.isArray(cloudProgress.solvedProblems)) {
+          cloudProgress.solvedProblems.forEach((id) => {
+            if (!mergedSolved[id]) {
+              mergedSolved[id] = { status: 'ACCEPTED', timestamp: Date.now() };
+            }
           });
         }
+        setSolvedMap((prev) => ({ ...prev, ...mergedSolved }));
+        safeStorage.setItem('apex_solved_problems', JSON.stringify(mergedSolved));
 
-        if (cloudProgress.masteredProblems && cloudProgress.masteredProblems.length > 0) {
-          setMasteredList((prev) => {
-            const merged = Array.from(new Set([...prev, ...cloudProgress.masteredProblems]));
-            safeStorage.setItem('apex_mastered_problems', JSON.stringify(merged));
-            return merged;
-          });
-        }
+        // 2. Mastered Problems: Union
+        const localMasteredRaw = safeStorage.getItem('apex_mastered_problems');
+        const localMastered: string[] = localMasteredRaw ? JSON.parse(localMasteredRaw) : [];
+        const cloudMastered: string[] = cloudProgress?.masteredProblems || [];
+        const mergedMastered = Array.from(new Set([...localMastered, ...cloudMastered]));
+        setMasteredList(mergedMastered);
+        safeStorage.setItem('apex_mastered_problems', JSON.stringify(mergedMastered));
 
-        if (cloudProgress.reviewProblems && cloudProgress.reviewProblems.length > 0) {
-          setReviewList((prev) => {
-            const merged = Array.from(new Set([...prev, ...cloudProgress.reviewProblems]));
-            safeStorage.setItem('apex_review_problems', JSON.stringify(merged));
-            return merged;
-          });
-        }
+        // 3. Review Problems: Union
+        const localReviewRaw = safeStorage.getItem('apex_review_problems');
+        const localReview: string[] = localReviewRaw ? JSON.parse(localReviewRaw) : [];
+        const cloudReview: string[] = cloudProgress?.reviewProblems || [];
+        const mergedReview = Array.from(new Set([...localReview, ...cloudReview]));
+        setReviewList(mergedReview);
+        safeStorage.setItem('apex_review_problems', JSON.stringify(mergedReview));
 
-        if (cloudProgress.notesMap && Object.keys(cloudProgress.notesMap).length > 0) {
-          setNotesMap((prev) => {
-            const merged = { ...prev, ...cloudProgress.notesMap };
-            safeStorage.setItem('apex_problem_notes', JSON.stringify(merged));
-            return merged;
-          });
-        }
+        // 4. Notes: Union
+        const localNotesRaw = safeStorage.getItem('apex_problem_notes');
+        const localNotes: Record<string, string> = localNotesRaw ? JSON.parse(localNotesRaw) : {};
+        const cloudNotes: Record<string, string> = cloudProgress?.notesMap || {};
+        const mergedNotes = { ...localNotes, ...cloudNotes };
+        setNotesMap(mergedNotes);
+        safeStorage.setItem('apex_problem_notes', JSON.stringify(mergedNotes));
 
+        // 5. Cloud Queries: Union
         const cloudQueries = await fetchCloudQueries();
         if (cloudQueries && Object.keys(cloudQueries).length > 0) {
           setSavedQueries((prev) => {
             const merged = { ...prev, ...cloudQueries };
             safeStorage.setItem('apex_saved_user_queries', JSON.stringify(merged));
             return merged;
+          });
+        }
+
+        // 6. Push unified union back to Cloud Firestore so both local & cloud are 100% consistent
+        const allSolvedKeys = Object.keys(mergedSolved);
+        if (allSolvedKeys.length > 0 || mergedMastered.length > 0 || mergedReview.length > 0) {
+          await syncProgressToCloud({
+            solvedProblems: allSolvedKeys,
+            masteredProblems: mergedMastered,
+            reviewProblems: mergedReview,
+            notesMap: mergedNotes,
           });
         }
 
@@ -1409,15 +1475,25 @@ export default function App() {
   };
 
   // Steppers & Navigation across full 27,500 curriculum questions
+  const clearExecutionState = () => {
+    setSubmissionVerdict(null);
+    setExecutionResult(null);
+    safeStorage.removeItem('apex_last_execution_result');
+    safeStorage.removeItem('apex_last_execution_problem_id');
+  };
+
   const handleNextQuestion = () => {
+    clearExecutionState();
     setQuestionNumber((prev) => (prev >= totalQuestionsCount ? 1 : prev + 1));
   };
 
   const handlePrevQuestion = () => {
+    clearExecutionState();
     setQuestionNumber((prev) => (prev <= 1 ? totalQuestionsCount : prev - 1));
   };
 
   const handleShuffle = () => {
+    clearExecutionState();
     const randomQ = Math.floor(Math.random() * totalQuestionsCount) + 1;
     setQuestionNumber(randomQ);
   };
@@ -1426,6 +1502,7 @@ export default function App() {
     if (e) e.preventDefault();
     const parsed = parseInt(jumpInput, 10);
     if (!isNaN(parsed) && parsed >= 1 && parsed <= totalQuestionsCount) {
+      clearExecutionState();
       setQuestionNumber(parsed);
     } else {
       setJumpInput(String(questionNumber));
@@ -1433,6 +1510,7 @@ export default function App() {
   };
 
   const handleSelectTopic = (topicId: TopicCategory) => {
+    clearExecutionState();
     setActiveTopic(topicId);
     setQuestionNumber(1);
     setJumpInput('1');
@@ -1510,6 +1588,7 @@ export default function App() {
       const result = evaluateSqlQuery(sqlCode, problem);
       setExecutionResult(result);
       safeStorage.setItem('apex_last_execution_result', JSON.stringify(result));
+      safeStorage.setItem('apex_last_execution_problem_id', problem.id);
       setConsoleTab('result');
 
       const isAccepted = result.status === 'ACCEPTED' || (result.diffReport?.isFullMatch === true);
@@ -1581,22 +1660,6 @@ export default function App() {
           timestamp: Date.now(),
           isSubmit,
         });
-
-        if (solvedMap[problem.id]) {
-          const updatedSolved = { ...solvedMap };
-          delete updatedSolved[problem.id];
-          setSolvedMap(updatedSolved);
-          safeStorage.setItem('apex_solved_problems', JSON.stringify(updatedSolved));
-          if (currentUser) {
-            syncProgressToCloud({
-              solvedProblems: Object.keys(updatedSolved),
-              masteredProblems: masteredList,
-              reviewProblems: reviewList,
-              notesMap,
-            });
-            syncQueryToCloud(problem.id, sqlCode, dialect, false);
-          }
-        }
       }
       setIsExecuting(false);
     }, 240);
@@ -1753,6 +1816,16 @@ export default function App() {
                   1,309
                 </span>
               </button>
+              <button
+                onClick={() => {
+                  setCurrentView('profile');
+                  window.location.hash = '#/profile';
+                }}
+                className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
+              >
+                <span>📊</span>
+                <span>Profile</span>
+              </button>
             </div>
           </div>
 
@@ -1771,6 +1844,10 @@ export default function App() {
               solvedCount={Object.keys(solvedMap).length}
               masteredCount={masteredList.length}
               onSyncAll={handleCloudSyncAll}
+              onOpenProfile={() => {
+                setCurrentView('profile');
+                window.location.hash = '#/profile';
+              }}
             />
           </div>
         </header>
@@ -1791,6 +1868,26 @@ export default function App() {
           </div>
         )}
       </div>
+    );
+  }
+
+  if (currentView === 'profile') {
+    return (
+      <ProfileDashboard
+        solvedMap={solvedMap}
+        masteredList={masteredList}
+        reviewList={reviewList}
+        onSelectProblem={handleSelectDirectoryProblem}
+        onBackToSandbox={() => {
+          setCurrentView('sandbox');
+          window.location.hash = '#/sandbox';
+        }}
+        onOpenDirectory={() => {
+          setCurrentView('directory');
+          window.location.hash = '#/questions';
+        }}
+        onSyncAll={handleCloudSyncAll}
+      />
     );
   }
 
@@ -1841,6 +1938,20 @@ export default function App() {
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono leading-none">
                 1,309
               </span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentView('profile');
+                window.location.hash = '#/profile';
+              }}
+              className={`px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+                currentView === 'profile'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>📊</span>
+              <span>Profile</span>
             </button>
           </div>
 
@@ -1976,6 +2087,10 @@ export default function App() {
               solvedCount={Object.keys(solvedMap).length}
               masteredCount={masteredList.length}
               onSyncAll={handleCloudSyncAll}
+              onOpenProfile={() => {
+                setCurrentView('profile');
+                window.location.hash = '#/profile';
+              }}
             />
           </div>
         </div>
@@ -2002,6 +2117,10 @@ export default function App() {
               solvedCount={Object.keys(solvedMap).length}
               masteredCount={masteredList.length}
               onSyncAll={handleCloudSyncAll}
+              onOpenProfile={() => {
+                setCurrentView('profile');
+                window.location.hash = '#/profile';
+              }}
             />
 
             <button

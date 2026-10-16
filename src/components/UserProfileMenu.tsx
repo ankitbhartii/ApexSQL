@@ -27,12 +27,14 @@ interface UserProfileMenuProps {
   solvedCount: number;
   masteredCount: number;
   onSyncAll: () => Promise<void>;
+  onOpenProfile?: () => void;
 }
 
 export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
   solvedCount,
   masteredCount,
-  onSyncAll
+  onSyncAll,
+  onOpenProfile
 }) => {
   const {
     currentUser,
@@ -238,6 +240,25 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
                 <span>Link Cloud Account</span>
               </button>
             )}
+
+            {/* Profile & Skill Analytics Dashboard Action */}
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                if (onOpenProfile) {
+                  onOpenProfile();
+                } else {
+                  window.location.hash = '#/profile';
+                }
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 rounded-xl transition border border-indigo-400/40 mb-1.5 cursor-pointer shadow-md shadow-indigo-500/20 active:scale-98"
+            >
+              <div className="flex items-center gap-2">
+                <Award className="w-3.5 h-3.5 text-cyan-200" />
+                <span>Profile & Skill Analytics</span>
+              </div>
+              <span className="text-[10px] text-cyan-100 font-mono">View →</span>
+            </button>
 
             {/* Sync Now Action */}
             <button
