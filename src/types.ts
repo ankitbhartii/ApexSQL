@@ -30,7 +30,8 @@ export type TopicCategory =
   | 'ctes'
   | 'datetime'
   | 'funnel_cohort'
-  | 'optimization';
+  | 'optimization'
+  | 'advanced_analytics';
 
 export interface ColumnDef {
   name: string;
@@ -113,7 +114,7 @@ export interface SqlProblem {
   };
   starterCodeByDialect: Record<Dialect, string>;
   officialSolutionByDialect: Record<Dialect, string>;
-  deepDive: {
+  deepDive?: {
     executionOrder: string[];
     indexStrategy: string;
     complexity: string;

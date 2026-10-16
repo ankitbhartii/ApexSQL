@@ -1928,7 +1928,7 @@ export default function App() {
                 window.location.hash = '#/questions';
               }}
               className={`px-2 lg:px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
-                currentView === 'directory'
+                (currentView as string) === 'directory'
                   ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/25'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
@@ -1945,7 +1945,7 @@ export default function App() {
                 window.location.hash = '#/profile';
               }}
               className={`px-2 lg:px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
-                currentView === 'profile'
+                (currentView as string) === 'profile'
                   ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
@@ -3170,7 +3170,9 @@ export default function App() {
               onRun={handleRunQuery}
               onSubmit={handleSubmitQuery}
               dialect={dialect}
-              height="h-64 lg:h-72"
+              schemas={problem.schemas}
+              onReset={handleResetStarter}
+              height="h-72 lg:h-80"
             />
           </div>
 
@@ -3788,7 +3790,7 @@ export default function App() {
                 </button>
 
                 <AnimatePresence>
-                  {isDeepDiveOpen && (
+                  {isDeepDiveOpen && problem.deepDive && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}

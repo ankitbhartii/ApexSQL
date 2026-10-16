@@ -612,6 +612,10 @@ Extract the authentic scenario and return a JSON object with:
 }
 Output only valid JSON.`;
 
+    if (!ai) {
+      return res.json({ success: true, result: getEnrichedFallback() });
+    }
+
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
