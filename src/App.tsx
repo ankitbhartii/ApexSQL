@@ -1936,9 +1936,9 @@ export default function App() {
       {/* ==================================================================== */}
       {/* 1. TOP DOCKED HEADER (DESKTOP & TABLET) */}
       {/* ==================================================================== */}
-      <header className="hidden md:flex items-center justify-between px-3 lg:px-4 h-14 bg-[#0b1120]/95 backdrop-blur-md border-b border-slate-800/80 shrink-0 z-30 select-none gap-2 w-full max-w-full">
+      <header className="hidden md:flex items-center justify-between px-2 sm:px-3 lg:px-4 h-14 bg-[#0b1120]/95 backdrop-blur-md border-b border-slate-800/80 shrink-0 z-30 select-none gap-1.5 lg:gap-2 w-full max-w-full overflow-hidden">
         {/* Left: Brand + View Switcher + Challenge Mode */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
           <div className="flex items-center gap-1.5 mr-0.5 shrink-0">
             <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/20">
               SQL
@@ -1953,7 +1953,7 @@ export default function App() {
                 setCurrentView('sandbox');
                 window.location.hash = '#/sandbox';
               }}
-              className={`px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+              className={`px-2 lg:px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
                 currentView === 'sandbox'
                   ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
                   : 'text-slate-400 hover:text-slate-200'
@@ -1967,7 +1967,7 @@ export default function App() {
                 setCurrentView('directory');
                 window.location.hash = '#/questions';
               }}
-              className={`px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+              className={`px-2 lg:px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
                 currentView === 'directory'
                   ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/25'
                   : 'text-slate-400 hover:text-slate-200'
@@ -1975,7 +1975,7 @@ export default function App() {
             >
               <span>📚</span>
               <span>Questions</span>
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono leading-none">
+              <span className="hidden xl:inline-block px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono leading-none">
                 1,309
               </span>
             </button>
@@ -1984,7 +1984,7 @@ export default function App() {
                 setCurrentView('profile');
                 window.location.hash = '#/profile';
               }}
-              className={`px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
+              className={`px-2 lg:px-2.5 h-full rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
                 currentView === 'profile'
                   ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
                   : 'text-slate-400 hover:text-slate-200'
@@ -2005,7 +2005,7 @@ export default function App() {
               setQuestionNumber(1);
               setJumpInput('1');
             }}
-            className="h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-100 font-semibold text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer shadow-xs whitespace-nowrap shrink-0 max-w-[145px] lg:max-w-[170px]"
+            className="h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-100 font-semibold text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer shadow-xs whitespace-nowrap shrink-0 max-w-[125px] xl:max-w-[155px] 2xl:max-w-[170px]"
             title="Switch Challenge Mode"
           >
             <option value="skill_matrix">⚡ Skill Matrix</option>
@@ -2015,12 +2015,12 @@ export default function App() {
             <option value="live_stream">📡 Live Contest Stream</option>
           </select>
 
-          {/* Topic Dropdown - only when in sandbox and on 2xl+ screens to prevent navbar overcrowding */}
+          {/* Topic Dropdown - only when in sandbox and on xl+ screens to prevent navbar overcrowding */}
           {currentView === 'sandbox' && (
             <select
               value={activeTopic}
               onChange={(e) => handleSelectTopic(e.target.value as TopicCategory)}
-              className="hidden lg:block h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer max-w-[130px] xl:max-w-[160px] truncate whitespace-nowrap shrink-0"
+              className="hidden xl:block h-8 bg-slate-900 hover:bg-slate-850 border border-slate-750 text-slate-200 font-medium text-xs rounded-lg px-2 focus:outline-hidden cursor-pointer max-w-[115px] xl:max-w-[135px] 2xl:max-w-[160px] truncate whitespace-nowrap shrink-0"
               title="Filter by SQL Topic"
             >
               {TOPIC_DRILL_CONFIGS.map((t) => (
@@ -2086,32 +2086,32 @@ export default function App() {
         )}
 
         {/* Right: Live Search, Platforms, Solved Count, Storage, Profile / Sign In */}
-        <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 shrink-0 pr-0.5">
           <button
             onClick={() => setIsGoogleSearchPanelOpen(true)}
-            className="px-2.5 h-8 rounded-lg text-xs font-semibold bg-blue-950/60 hover:bg-blue-900/80 text-blue-200 border border-blue-500/40 transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
+            className="px-2 lg:px-2.5 h-8 rounded-lg text-xs font-semibold bg-blue-950/60 hover:bg-blue-900/80 text-blue-200 border border-blue-500/40 transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
             title="Search real-time SQL challenges with Google Search Grounding"
           >
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
             </span>
-            <span className="hidden xl:inline">Live Contest</span>
-            <span className="xl:hidden">Live</span>
+            <span className="hidden 2xl:inline">Live Contest</span>
+            <span className="2xl:hidden hidden sm:inline">Live</span>
           </button>
 
           <button
             onClick={() => setIsPlatformModalOpen(true)}
-            className="px-2.5 h-8 rounded-lg text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
+            className="px-2 lg:px-2.5 h-8 rounded-lg text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
             title="Fetch live questions from LeetCode, HackerRank, DataDriven & FAANG"
           >
             <span>🌐</span>
-            <span className="hidden xl:inline">Fetch Platforms</span>
-            <span className="xl:hidden">Fetch</span>
+            <span className="hidden 2xl:inline">Fetch Platforms</span>
+            <span className="2xl:hidden hidden sm:inline">Fetch</span>
           </button>
 
           <span className="h-8 text-xs font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 rounded-lg whitespace-nowrap shrink-0">
-            ✓ {Object.keys(solvedMap).length} <span className="hidden xl:inline">Solved</span>
+            ✓ {Object.keys(solvedMap).length} <span className="hidden 2xl:inline">Solved</span>
           </span>
 
           <button

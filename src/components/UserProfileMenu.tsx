@@ -111,23 +111,23 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="h-8 flex items-center gap-2 px-2.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-750 hover:border-cyan-500/50 transition cursor-pointer text-left shrink-0 shadow-xs"
+        className="h-8 flex items-center gap-1.5 px-2 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-750 hover:border-cyan-500/50 transition cursor-pointer text-left shrink-0 shadow-xs max-w-[120px] 2xl:max-w-[155px]"
         aria-label="User Profile Menu"
       >
         {photo ? (
           <img
             src={photo}
             alt={displayName}
-            className="w-5 h-5 rounded-full border border-cyan-400/60 object-cover"
+            className="w-5 h-5 rounded-full border border-cyan-400/60 object-cover shrink-0"
           />
         ) : (
-          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold shadow-xs">
+          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold shadow-xs shrink-0">
             {displayName.charAt(0).toUpperCase()}
           </div>
         )}
 
-        <div className="hidden lg:flex items-center gap-1.5 text-left">
-          <span className="text-xs font-semibold text-slate-200 max-w-[90px] truncate">
+        <div className="hidden xl:flex items-center gap-1 text-left min-w-0">
+          <span className="text-xs font-semibold text-slate-200 max-w-[55px] xl:max-w-[68px] 2xl:max-w-[90px] truncate">
             {displayName}
           </span>
           {/* Live Database status beacon */}
@@ -145,7 +145,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
           />
         </div>
 
-        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </motion.button>
 
       {/* Dropdown Menu */}
