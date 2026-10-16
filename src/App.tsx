@@ -1920,7 +1920,7 @@ export default function App() {
                 <span>📚</span>
                 <span>Questions</span>
                 <span className="hidden sm:inline-block px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono">
-                  1,309
+                  11,309
                 </span>
               </button>
               <button
@@ -2045,7 +2045,7 @@ export default function App() {
               <span>📚</span>
               <span>Questions</span>
               <span className="hidden xl:inline-block px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-400/20 text-cyan-200 font-mono leading-none">
-                1,309
+                11,309
               </span>
             </button>
             <button
@@ -2152,7 +2152,7 @@ export default function App() {
           <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-slate-950/70 border border-white/[0.08] rounded-full text-xs text-slate-400 font-mono backdrop-blur-md">
             <span>📚 Question Library</span>
             <span className="text-slate-600">•</span>
-            <span className="text-cyan-400 font-bold">1,309 Curated Challenges</span>
+            <span className="text-cyan-400 font-bold">11,309 Curated Challenges</span>
           </div>
         )}
 
@@ -2352,7 +2352,7 @@ export default function App() {
                     ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-xs'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Questions Library (1,309)"
+                title="Questions Library (11,309)"
               >
                 <span>📚</span>
                 <span className="hidden xs:inline">Questions</span>

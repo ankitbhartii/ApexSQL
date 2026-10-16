@@ -428,7 +428,9 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
 
   // Platform filter
   if (platform !== 'all') {
-    if (platform === 'leetcode') {
+    if (platform === 'stackoverflow') {
+      filtered = filtered.filter((p) => p.platform === 'Stack Overflow');
+    } else if (platform === 'leetcode') {
       filtered = filtered.filter((p) => p.platform === 'LeetCode');
     } else if (platform === 'hackerrank') {
       filtered = filtered.filter((p) => p.platform === 'HackerRank');

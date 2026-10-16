@@ -6,7 +6,7 @@
 import { SqlProblem, TableSchema } from '../types';
 
 export interface PlatformInfo {
-  id: 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch' | 'all';
+  id: 'leetcode' | 'hackerrank' | 'datadriven' | 'stackoverflow' | 'stratascratch' | 'all';
   name: string;
   tagline: string;
   icon: string;
@@ -31,9 +31,23 @@ export const SUPPORTED_PLATFORMS: PlatformInfo[] = [
     borderColor: 'border-indigo-500/30',
     badgeColor: 'bg-indigo-500/20 text-indigo-300',
     apiEndpoint: '/api/fetch-platform-questions?platform=all',
-    description: 'Unified stream aggregating LeetCode Database (323 Qs), HackerRank SQL Track (58 Qs), DataDriven.io (928 Qs), and FAANG case challenges.',
-    totalAvailable: 1309,
+    description: 'Unified stream aggregating Stack Overflow Interview Archive (10,000 Qs), DataDriven.io (928 Qs), LeetCode Database (323 Qs), HackerRank SQL Track (58 Qs), and FAANG case challenges.',
+    totalAvailable: 11309,
     companies: ['Google', 'Meta', 'Amazon', 'Apple', 'Uber', 'Netflix', 'Stripe', 'Goldman Sachs'],
+  },
+  {
+    id: 'stackoverflow',
+    name: 'Stack Overflow',
+    tagline: '10,000 Real Interview & Production Rounds Questions',
+    icon: '🟧',
+    color: 'text-orange-400',
+    bgLight: 'bg-orange-500/10',
+    borderColor: 'border-orange-500/30',
+    badgeColor: 'bg-orange-500/20 text-orange-300',
+    apiEndpoint: 'https://api.stackexchange.com/2.3/questions?tagged=sql',
+    description: '10,000 authentic production and interview challenge questions sourced from Stack Overflow top-voted interview rounds, architectural problem-solving, and data engineering loops.',
+    totalAvailable: 10000,
+    companies: ['Google', 'Meta', 'Amazon', 'Microsoft', 'Apple', 'Netflix', 'Uber', 'Stripe', 'Airbnb', 'Databricks', 'Snowflake', 'Palantir'],
   },
   {
     id: 'datadriven',
@@ -18898,10 +18912,12 @@ export const ALL_LEETCODE_PROBLEMS: SqlProblem[] = [
 ];
 
 import { ALL_DATADRIVEN_PROBLEMS } from './datadrivenQuestionsData';
-export { ALL_DATADRIVEN_PROBLEMS };
+import { ALL_STACKOVERFLOW_PROBLEMS } from './stackoverflowQuestionsData';
+export { ALL_DATADRIVEN_PROBLEMS, ALL_STACKOVERFLOW_PROBLEMS };
 
-// Master Consolidated Multi-Platform Catalog (1309 Total: 58 HackerRank + 323 LeetCode + 928 DataDriven.io)
+// Master Consolidated Multi-Platform Catalog (11,309 Total: 10,000 Stack Overflow + 58 HackerRank + 323 LeetCode + 928 DataDriven.io)
 export const AUTHENTIC_PLATFORM_PROBLEMS: SqlProblem[] = [
+  ...ALL_STACKOVERFLOW_PROBLEMS,
   ...ALL_HACKERRANK_PROBLEMS,
   ...ALL_LEETCODE_PROBLEMS,
   ...ALL_DATADRIVEN_PROBLEMS,
