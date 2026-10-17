@@ -33,6 +33,7 @@ import { SqlCodeEditor } from './components/SqlCodeEditor';
 import { MoreHorizontal } from 'lucide-react';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
+import { subscribeToLiveProblems } from './firebase';
 import {
   AUTHENTIC_PLATFORM_PROBLEMS,
   getCleanStarterCode,
@@ -1023,7 +1024,7 @@ export default function App() {
       const qKey = `${prob.id}_${dialect}`;
       const userDraft = savedQueries[qKey];
       const initialCode =
-        userDraft && !isSolutionLeak(userDraft, prob.officialSolutionByDialect[dialect])
+        userDraft && !isSolutionLeak(userDraft, prob?.officialSolutionByDialect?.[dialect])
           ? userDraft
           : getCleanStarterCode(prob, dialect);
 
@@ -1089,7 +1090,7 @@ export default function App() {
 
   // Initial sqlCode hydrated immediately from storage so it never flashes empty or disappears
   const [sqlCode, setSqlCode] = useState<string>(() => {
-    const qKey = `${problem.id}_${dialect}`;
+    const qKey = `${problem?.id || 'default'}_${dialect}`;
     const saved = safeStorage.getItem('apex_saved_user_queries');
     if (saved) {
       try {
@@ -1097,7 +1098,7 @@ export default function App() {
         if (
           parsed[qKey] !== undefined &&
           parsed[qKey].trim() !== '' &&
-          !isSolutionLeak(parsed[qKey], problem.officialSolutionByDialect[dialect])
+          !isSolutionLeak(parsed[qKey], problem?.officialSolutionByDialect?.[dialect])
         ) {
           return parsed[qKey];
         }
@@ -1108,10 +1109,10 @@ export default function App() {
     const currentProblemId = safeStorage.getItem('apex_current_problem_id');
     const currentSql = safeStorage.getItem('apex_current_sql');
     if (
-      currentProblemId === problem.id &&
+      currentProblemId === problem?.id &&
       currentSql &&
       currentSql.trim() !== '' &&
-      !isSolutionLeak(currentSql, problem.officialSolutionByDialect[dialect])
+      !isSolutionLeak(currentSql, problem?.officialSolutionByDialect?.[dialect])
     ) {
       return currentSql;
     }
@@ -1234,13 +1235,13 @@ export default function App() {
     if (
       savedDraft !== undefined &&
       savedDraft.trim() !== '' &&
-      !isSolutionLeak(savedDraft, problem.officialSolutionByDialect[dialect])
+      !isSolutionLeak(savedDraft, problem?.officialSolutionByDialect?.[dialect])
     ) {
       setSqlCode(savedDraft);
     } else {
       setSqlCode(getCleanStarterCode(problem, dialect));
     }
-  }, [problem.id, dialect]);
+  }, [problem?.id, dialect]);
 
   // Real-time reset of execution output and submission verdict when switching questions
   const prevProblemIdRef = useRef<string>(problem.id);
