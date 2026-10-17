@@ -10,7 +10,7 @@
 import { SqlProblem } from '../types';
 import { SCHEMA_EMPLOYEE, SCHEMA_CITY, SCHEMA_STATION, SCHEMA_STUDENTS, SCHEMA_HACKERS, SCHEMA_SUBMISSIONS } from './schemas';
 
-export const ALL_DATADRIVEN_PROBLEMS: SqlProblem[] = [
+const RAW_DATADRIVEN_PROBLEMS: SqlProblem[] = [
   {
     id: 'dd_latest_version_per_service',
     questionNumber: 1,
@@ -45484,3 +45484,24 @@ export const ALL_DATADRIVEN_PROBLEMS: SqlProblem[] = [
     isLiveAutoIngested: true
   }
 ];
+
+export const ALL_DATADRIVEN_PROBLEMS: SqlProblem[] = RAW_DATADRIVEN_PROBLEMS.map((prob) => {
+  const primaryTable = prob.schemas?.[0]?.tableName;
+  return {
+    ...prob,
+    starterCodeByDialect: {
+      postgres: primaryTable
+        ? `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+        : `-- Write your PostgreSQL query statement below\n`,
+      snowflake: primaryTable
+        ? `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+        : `-- Write your Snowflake SQL query statement below\n`,
+      bigquery: primaryTable
+        ? `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${primaryTable}\`;\n`
+        : `-- Write your GoogleSQL (BigQuery) query statement below\n`,
+      mysql: primaryTable
+        ? `# Write your MySQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+        : `# Write your MySQL query statement below\n`,
+    },
+  };
+});

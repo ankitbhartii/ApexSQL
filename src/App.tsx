@@ -33,8 +33,11 @@ import { SqlCodeEditor } from './components/SqlCodeEditor';
 import { MoreHorizontal } from 'lucide-react';
 import alasql from 'alasql';
 import { livePipeline } from './services/liveQuestionPipeline';
-import { subscribeToLiveProblems } from './firebase';
-import { AUTHENTIC_PLATFORM_PROBLEMS } from './services/platformQuestionsData';
+import {
+  AUTHENTIC_PLATFORM_PROBLEMS,
+  getCleanStarterCode,
+  isSolutionLeak,
+} from './services/platformQuestionsData';
 import type { LivePipelineStatus } from './types';
 import {
   searchGoogleGroundingSql,
@@ -1008,21 +1011,37 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
-  const handleSelectDirectoryProblem = useCallback((prob: SqlProblem) => {
-    setSubmissionVerdict(null);
-    setExecutionResult(null);
-    safeStorage.removeItem('apex_last_execution_result');
-    safeStorage.removeItem('apex_last_execution_problem_id');
-    livePipeline.ingestExternalProblems([prob], prob.platform);
-    setLiveProblems(livePipeline.getProblems());
-    setSelectedLiveProblemId(prob.id);
-    setActiveMode('live_stream');
-    setQuestionNumber(1);
-    setCurrentView('sandbox');
-    window.location.hash = '#/sandbox';
-    setInsertToast(`✓ Loaded "${prob.title}" into SQL Sandbox!`);
-    setTimeout(() => setInsertToast(null), 3500);
-  }, []);
+  const handleSelectDirectoryProblem = useCallback(
+    (prob: SqlProblem) => {
+      setSubmissionVerdict(null);
+      setExecutionResult(null);
+      safeStorage.removeItem('apex_last_execution_result');
+      safeStorage.removeItem('apex_last_execution_problem_id');
+      safeStorage.setItem('apex_current_problem_id', prob.id);
+
+      // Check if user has an authentic custom draft for this problem/dialect
+      const qKey = `${prob.id}_${dialect}`;
+      const userDraft = savedQueries[qKey];
+      const initialCode =
+        userDraft && !isSolutionLeak(userDraft, prob.officialSolutionByDialect[dialect])
+          ? userDraft
+          : getCleanStarterCode(prob, dialect);
+
+      setSqlCode(initialCode);
+      safeStorage.setItem('apex_current_sql', initialCode);
+
+      livePipeline.ingestExternalProblems([prob], prob.platform);
+      setLiveProblems(livePipeline.getProblems());
+      setSelectedLiveProblemId(prob.id);
+      setActiveMode('live_stream');
+      setQuestionNumber(1);
+      setCurrentView('sandbox');
+      window.location.hash = '#/sandbox';
+      setInsertToast(`✓ Loaded "${prob.title}" into SQL Sandbox!`);
+      setTimeout(() => setInsertToast(null), 3500);
+    },
+    [dialect, savedQueries]
+  );
 
   // Generate current problem
   const problem: SqlProblem = useMemo(() => {
@@ -1075,16 +1094,28 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed[qKey] !== undefined && parsed[qKey].trim() !== '') {
+        if (
+          parsed[qKey] !== undefined &&
+          parsed[qKey].trim() !== '' &&
+          !isSolutionLeak(parsed[qKey], problem.officialSolutionByDialect[dialect])
+        ) {
           return parsed[qKey];
         }
       } catch {
         // Fallback
       }
     }
+    const currentProblemId = safeStorage.getItem('apex_current_problem_id');
     const currentSql = safeStorage.getItem('apex_current_sql');
-    if (currentSql && currentSql.trim() !== '') return currentSql;
-    return problem.starterCodeByDialect[dialect] || '';
+    if (
+      currentProblemId === problem.id &&
+      currentSql &&
+      currentSql.trim() !== '' &&
+      !isSolutionLeak(currentSql, problem.officialSolutionByDialect[dialect])
+    ) {
+      return currentSql;
+    }
+    return getCleanStarterCode(problem, dialect);
   });
 
   // Persisted execution result so it never disappears on refresh (scoped strictly to current problem)
@@ -1200,10 +1231,14 @@ export default function App() {
   useEffect(() => {
     const queryKey = `${problem.id}_${dialect}`;
     const savedDraft = savedQueries[queryKey];
-    if (savedDraft !== undefined && savedDraft.trim() !== '') {
+    if (
+      savedDraft !== undefined &&
+      savedDraft.trim() !== '' &&
+      !isSolutionLeak(savedDraft, problem.officialSolutionByDialect[dialect])
+    ) {
       setSqlCode(savedDraft);
     } else {
-      setSqlCode(problem.starterCodeByDialect[dialect] || '');
+      setSqlCode(getCleanStarterCode(problem, dialect));
     }
   }, [problem.id, dialect]);
 
@@ -1222,7 +1257,8 @@ export default function App() {
   // Persist live draft code so refreshing never loses typed content
   useEffect(() => {
     safeStorage.setItem('apex_current_sql', sqlCode);
-  }, [sqlCode]);
+    safeStorage.setItem('apex_current_problem_id', problem.id);
+  }, [sqlCode, problem.id]);
 
   // Persist navigation and filter preferences
   useEffect(() => {
@@ -1801,7 +1837,7 @@ export default function App() {
   // Reset starter & clear saved draft
   const handleResetStarter = () => {
     const queryKey = `${problem.id}_${dialect}`;
-    const starter = problem.starterCodeByDialect[dialect] || '';
+    const starter = getCleanStarterCode(problem, dialect);
     setSqlCode(starter);
     setSavedQueries((prev) => {
       const updated = { ...prev };
@@ -1810,8 +1846,10 @@ export default function App() {
       return updated;
     });
     safeStorage.setItem('apex_current_sql', starter);
+    safeStorage.setItem('apex_current_problem_id', problem.id);
     setExecutionResult(null);
     safeStorage.removeItem('apex_last_execution_result');
+    safeStorage.removeItem('apex_last_execution_problem_id');
     setInsertToast('✓ Code reset to official starter template');
     setTimeout(() => setInsertToast(null), 2500);
   };
@@ -1841,7 +1879,9 @@ export default function App() {
       safeStorage.removeItem('apex_active_topic');
       safeStorage.removeItem('apex_question_number');
       safeStorage.removeItem('apex_current_sql');
+      safeStorage.removeItem('apex_current_problem_id');
       safeStorage.removeItem('apex_last_execution_result');
+      safeStorage.removeItem('apex_last_execution_problem_id');
       setSavedQueries({});
       setSolvedMap({});
       setNotesMap({});
@@ -1849,7 +1889,7 @@ export default function App() {
       setReviewList([]);
       setQuestionNumber(1);
       setExecutionResult(null);
-      setSqlCode(problem.starterCodeByDialect[dialect] || '');
+      setSqlCode(getCleanStarterCode(problem, dialect));
       setIsStorageModalOpen(false);
       setInsertToast('✓ All local progress reset successfully');
       setTimeout(() => setInsertToast(null), 3000);
