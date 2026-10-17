@@ -5,26 +5,24 @@
 
 import { SqlProblem, TableSchema, Dialect } from '../types';
 
-export function buildCleanStarterCode(schemas?: TableSchema[]): Record<Dialect, string> {
-  const primaryTable = schemas?.[0]?.tableName;
+export function buildCleanStarterCode(_schemas?: TableSchema[]): Record<Dialect, string> {
   return {
-    postgres: primaryTable
-      ? `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${primaryTable};\n`
-      : `-- Write your PostgreSQL query statement below\n`,
-    snowflake: primaryTable
-      ? `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${primaryTable};\n`
-      : `-- Write your Snowflake SQL query statement below\n`,
-    bigquery: primaryTable
-      ? `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${primaryTable}\`;\n`
-      : `-- Write your GoogleSQL (BigQuery) query statement below\n`,
-    mysql: primaryTable
-      ? `# Write your MySQL query statement below\nSELECT \nFROM ${primaryTable};\n`
-      : `# Write your MySQL query statement below\n`,
+    postgres: '-- Write your PostgreSQL query statement below\n',
+    mysql: '# Write your MySQL query statement below\n',
+    snowflake: '-- Write your Snowflake SQL query statement below\n',
+    bigquery: '-- Write your GoogleSQL (BigQuery) query statement below\n',
   };
 }
 
 export function isSolutionLeak(candidateCode?: string, officialSolution?: string): boolean {
-  if (!candidateCode || !officialSolution) return false;
+  if (!candidateCode) return false;
+
+  // Filter out any old boilerplate templates with SELECT FROM
+  if (/^(--|#)\s*write your .* query statement below\s*select\s*from/i.test(candidateCode.trim())) {
+    return true;
+  }
+
+  if (!officialSolution) return false;
 
   const normalize = (sql: string) =>
     sql
@@ -63,39 +61,14 @@ export function isSolutionLeak(candidateCode?: string, officialSolution?: string
   return false;
 }
 
-export function getCleanStarterCode(problem?: SqlProblem | null, dialect: Dialect = 'postgres'): string {
-  if (!problem) {
-    if (dialect === 'mysql') return '# Write your MySQL query statement below\n';
-    if (dialect === 'snowflake') return '-- Write your Snowflake SQL query statement below\n';
-    if (dialect === 'bigquery') return '-- Write your GoogleSQL (BigQuery) query statement below\n';
-    return '-- Write your PostgreSQL query statement below\n';
-  }
-
-  const primaryTable = problem.schemas?.[0]?.tableName;
+export function getCleanStarterCode(_problem?: SqlProblem | null, dialect: Dialect = 'postgres'): string {
   const dialectHeaders: Record<Dialect, string> = {
     postgres: '-- Write your PostgreSQL query statement below\n',
     mysql: '# Write your MySQL query statement below\n',
     snowflake: '-- Write your Snowflake SQL query statement below\n',
     bigquery: '-- Write your GoogleSQL (BigQuery) query statement below\n',
   };
-
-  const header = dialectHeaders[dialect] || dialectHeaders.postgres;
-
-  // Check if starterCodeByDialect exists and is NOT a leaked solution
-  const candidateStarter = problem.starterCodeByDialect?.[dialect];
-  const officialSol = problem.officialSolutionByDialect?.[dialect] || '';
-
-  if (candidateStarter && !isSolutionLeak(candidateStarter, officialSol)) {
-    return candidateStarter;
-  }
-
-  // Construct clean boilerplate
-  if (primaryTable) {
-    const formattedTable = dialect === 'bigquery' ? `\`${primaryTable}\`` : primaryTable;
-    return `${header}SELECT \nFROM ${formattedTable};\n`;
-  }
-
-  return header;
+  return dialectHeaders[dialect] || dialectHeaders.postgres;
 }
 
 

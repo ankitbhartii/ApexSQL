@@ -45485,23 +45485,12 @@ const RAW_DATADRIVEN_PROBLEMS: SqlProblem[] = [
   }
 ];
 
-export const ALL_DATADRIVEN_PROBLEMS: SqlProblem[] = RAW_DATADRIVEN_PROBLEMS.map((prob) => {
-  const primaryTable = prob.schemas?.[0]?.tableName;
-  return {
-    ...prob,
-    starterCodeByDialect: {
-      postgres: primaryTable
-        ? `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${primaryTable};\n`
-        : `-- Write your PostgreSQL query statement below\n`,
-      snowflake: primaryTable
-        ? `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${primaryTable};\n`
-        : `-- Write your Snowflake SQL query statement below\n`,
-      bigquery: primaryTable
-        ? `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${primaryTable}\`;\n`
-        : `-- Write your GoogleSQL (BigQuery) query statement below\n`,
-      mysql: primaryTable
-        ? `# Write your MySQL query statement below\nSELECT \nFROM ${primaryTable};\n`
-        : `# Write your MySQL query statement below\n`,
-    },
-  };
-});
+export const ALL_DATADRIVEN_PROBLEMS: SqlProblem[] = RAW_DATADRIVEN_PROBLEMS.map((prob) => ({
+  ...prob,
+  starterCodeByDialect: {
+    postgres: '-- Write your PostgreSQL query statement below\n',
+    snowflake: '-- Write your Snowflake SQL query statement below\n',
+    bigquery: '-- Write your GoogleSQL (BigQuery) query statement below\n',
+    mysql: '# Write your MySQL query statement below\n',
+  },
+}));

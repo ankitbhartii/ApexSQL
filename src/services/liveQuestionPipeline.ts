@@ -1029,18 +1029,10 @@ export class LiveQuestionPipeline {
       },
       hints: tpl.hints,
       starterCodeByDialect: {
-        postgres: schemas[0]?.tableName
-          ? `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
-          : `-- Write your PostgreSQL query statement below\n`,
-        snowflake: schemas[0]?.tableName
-          ? `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
-          : `-- Write your Snowflake SQL query statement below\n`,
-        bigquery: schemas[0]?.tableName
-          ? `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${schemas[0].tableName}\`;\n`
-          : `-- Write your GoogleSQL (BigQuery) query statement below\n`,
-        mysql: schemas[0]?.tableName
-          ? `# Write your MySQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
-          : `# Write your MySQL query statement below\n`,
+        postgres: '-- Write your PostgreSQL query statement below\n',
+        snowflake: '-- Write your Snowflake SQL query statement below\n',
+        bigquery: '-- Write your GoogleSQL (BigQuery) query statement below\n',
+        mysql: '# Write your MySQL query statement below\n',
       },
       officialSolutionByDialect: tpl.officialSolutionByDialect,
       deepDive: tpl.deepDive,

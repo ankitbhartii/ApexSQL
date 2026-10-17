@@ -472,10 +472,10 @@ export function convertGroundedPayloadToSqlProblem(
     },
     hints: payload.hints,
     starterCodeByDialect: {
-      postgres: `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${targetTables[0]?.tableName || 'target_table'};\n`,
-      snowflake: `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${targetTables[0]?.tableName || 'target_table'};\n`,
-      bigquery: `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${targetTables[0]?.tableName || 'target_table'}\`;\n`,
-      mysql: `# Write your MySQL query statement below\nSELECT \nFROM ${targetTables[0]?.tableName || 'target_table'};\n`,
+      postgres: '-- Write your PostgreSQL query statement below\n',
+      snowflake: '-- Write your Snowflake SQL query statement below\n',
+      bigquery: '-- Write your GoogleSQL (BigQuery) query statement below\n',
+      mysql: '# Write your MySQL query statement below\n',
     },
     officialSolutionByDialect: {
       postgres: payload.solutionSql,
