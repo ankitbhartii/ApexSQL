@@ -1028,7 +1028,20 @@ export class LiveQuestionPipeline {
         rows: expRows,
       },
       hints: tpl.hints,
-      starterCodeByDialect: tpl.starterCodeByDialect,
+      starterCodeByDialect: {
+        postgres: schemas[0]?.tableName
+          ? `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
+          : `-- Write your PostgreSQL query statement below\n`,
+        snowflake: schemas[0]?.tableName
+          ? `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
+          : `-- Write your Snowflake SQL query statement below\n`,
+        bigquery: schemas[0]?.tableName
+          ? `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${schemas[0].tableName}\`;\n`
+          : `-- Write your GoogleSQL (BigQuery) query statement below\n`,
+        mysql: schemas[0]?.tableName
+          ? `# Write your MySQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
+          : `# Write your MySQL query statement below\n`,
+      },
       officialSolutionByDialect: tpl.officialSolutionByDialect,
       deepDive: tpl.deepDive,
       sourcePlatform: tpl.sourcePlatform,

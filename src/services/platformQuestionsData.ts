@@ -3,7 +3,101 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { SqlProblem, TableSchema } from '../types';
+import { SqlProblem, TableSchema, Dialect } from '../types';
+
+export function buildCleanStarterCode(schemas?: TableSchema[]): Record<Dialect, string> {
+  const primaryTable = schemas?.[0]?.tableName;
+  return {
+    postgres: primaryTable
+      ? `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+      : `-- Write your PostgreSQL query statement below\n`,
+    snowflake: primaryTable
+      ? `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+      : `-- Write your Snowflake SQL query statement below\n`,
+    bigquery: primaryTable
+      ? `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${primaryTable}\`;\n`
+      : `-- Write your GoogleSQL (BigQuery) query statement below\n`,
+    mysql: primaryTable
+      ? `# Write your MySQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+      : `# Write your MySQL query statement below\n`,
+  };
+}
+
+export function isSolutionLeak(candidateCode?: string, officialSolution?: string): boolean {
+  if (!candidateCode || !officialSolution) return false;
+
+  const normalize = (sql: string) =>
+    sql
+      .replace(/--.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/[`"'[\]]/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/;/g, '')
+      .trim()
+      .toLowerCase();
+
+  const cleanCand = normalize(candidateCode);
+  const cleanSol = normalize(officialSolution);
+
+  if (!cleanCand) return false;
+
+  // Exact match without comments/punctuation/whitespace
+  if (cleanCand === cleanSol) return true;
+
+  // If candidate contains substantial query clauses identical to solution
+  if (cleanCand.length > 15 && cleanSol.includes(cleanCand)) {
+    if (/\b(where|group by|order by|having|join|limit|partition by|over|union)\b/i.test(cleanCand)) {
+      return true;
+    }
+  }
+
+  // Also check if candidate has where/join matching solution
+  if (cleanSol.length > 20 && cleanCand.length > 20) {
+    const candWhere = cleanCand.match(/\bwhere\b.*/i)?.[0];
+    const solWhere = cleanSol.match(/\bwhere\b.*/i)?.[0];
+    if (candWhere && solWhere && candWhere === solWhere) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function getCleanStarterCode(problem?: SqlProblem | null, dialect: Dialect = 'postgres'): string {
+  if (!problem) {
+    if (dialect === 'mysql') return '# Write your MySQL query statement below\n';
+    if (dialect === 'snowflake') return '-- Write your Snowflake SQL query statement below\n';
+    if (dialect === 'bigquery') return '-- Write your GoogleSQL (BigQuery) query statement below\n';
+    return '-- Write your PostgreSQL query statement below\n';
+  }
+
+  const primaryTable = problem.schemas?.[0]?.tableName;
+  const dialectHeaders: Record<Dialect, string> = {
+    postgres: '-- Write your PostgreSQL query statement below\n',
+    mysql: '# Write your MySQL query statement below\n',
+    snowflake: '-- Write your Snowflake SQL query statement below\n',
+    bigquery: '-- Write your GoogleSQL (BigQuery) query statement below\n',
+  };
+
+  const header = dialectHeaders[dialect] || dialectHeaders.postgres;
+
+  // Check if starterCodeByDialect exists and is NOT a leaked solution
+  const candidateStarter = problem.starterCodeByDialect?.[dialect];
+  const officialSol = problem.officialSolutionByDialect?.[dialect] || '';
+
+  if (candidateStarter && !isSolutionLeak(candidateStarter, officialSol)) {
+    return candidateStarter;
+  }
+
+  // Construct clean boilerplate
+  if (primaryTable) {
+    const formattedTable = dialect === 'bigquery' ? `\`${primaryTable}\`` : primaryTable;
+    return `${header}SELECT \nFROM ${formattedTable};\n`;
+  }
+
+  return header;
+}
+
 
 export interface PlatformInfo {
   id: 'leetcode' | 'hackerrank' | 'datadriven' | 'stackoverflow' | 'stratascratch' | 'all';
@@ -3081,7 +3175,7 @@ const DEPRECATED_HACKERRANK_PROBLEMS: SqlProblem[] = [
 ];
 
 // All 323 Official LeetCode Database Problems
-export const ALL_LEETCODE_PROBLEMS: SqlProblem[] = [
+const RAW_LEETCODE_PROBLEMS: SqlProblem[] = [
   {
     id: 'lc_175',
     questionNumber: 175,
@@ -18915,6 +19009,11 @@ import { ALL_DATADRIVEN_PROBLEMS } from './datadrivenQuestionsData';
 import { ALL_STACKOVERFLOW_PROBLEMS } from './stackoverflowQuestionsData';
 export { ALL_DATADRIVEN_PROBLEMS, ALL_STACKOVERFLOW_PROBLEMS };
 
+export const ALL_LEETCODE_PROBLEMS: SqlProblem[] = RAW_LEETCODE_PROBLEMS.map((prob) => ({
+  ...prob,
+  starterCodeByDialect: buildCleanStarterCode(prob.schemas),
+}));
+
 // Master Consolidated Multi-Platform Catalog (11,309 Total: 10,000 Stack Overflow + 58 HackerRank + 323 LeetCode + 928 DataDriven.io)
 export const AUTHENTIC_PLATFORM_PROBLEMS: SqlProblem[] = [
   ...ALL_STACKOVERFLOW_PROBLEMS,
@@ -18922,3 +19021,4 @@ export const AUTHENTIC_PLATFORM_PROBLEMS: SqlProblem[] = [
   ...ALL_LEETCODE_PROBLEMS,
   ...ALL_DATADRIVEN_PROBLEMS,
 ];
+

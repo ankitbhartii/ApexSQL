@@ -472,10 +472,10 @@ export function convertGroundedPayloadToSqlProblem(
     },
     hints: payload.hints,
     starterCodeByDialect: {
-      postgres: `-- ${payload.company} • ${payload.title}\n-- Grounded with Google Search Engine\n${payload.solutionSql}`,
-      snowflake: payload.solutionSql,
-      bigquery: payload.solutionSql,
-      mysql: payload.solutionSql,
+      postgres: `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${targetTables[0]?.tableName || 'target_table'};\n`,
+      snowflake: `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${targetTables[0]?.tableName || 'target_table'};\n`,
+      bigquery: `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${targetTables[0]?.tableName || 'target_table'}\`;\n`,
+      mysql: `# Write your MySQL query statement below\nSELECT \nFROM ${targetTables[0]?.tableName || 'target_table'};\n`,
     },
     officialSolutionByDialect: {
       postgres: payload.solutionSql,

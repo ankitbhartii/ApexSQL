@@ -346,7 +346,7 @@ export const SCHEMA_FUNCTIONS: TableSchema = {
 // 58 AUTHENTIC HACKERRANK SQL DOMAIN PROBLEMS (WITH EXACT PROBLEM STATEMENTS)
 // ============================================================================
 
-export const AUTHENTIC_HACKERRANK_PROBLEMS: SqlProblem[] = [
+const RAW_AUTHENTIC_HACKERRANK_PROBLEMS: SqlProblem[] = [
   {
     id: 'hr_revising_the_select_query',
     questionNumber: 1,
@@ -2123,3 +2123,24 @@ export const AUTHENTIC_HACKERRANK_PROBLEMS: SqlProblem[] = [
     isLiveAutoIngested: true,
   },
 ];
+
+export const AUTHENTIC_HACKERRANK_PROBLEMS: SqlProblem[] = RAW_AUTHENTIC_HACKERRANK_PROBLEMS.map((prob) => {
+  const primaryTable = prob.schemas?.[0]?.tableName;
+  return {
+    ...prob,
+    starterCodeByDialect: {
+      postgres: primaryTable
+        ? `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+        : `-- Write your PostgreSQL query statement below\n`,
+      snowflake: primaryTable
+        ? `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+        : `-- Write your Snowflake SQL query statement below\n`,
+      bigquery: primaryTable
+        ? `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${primaryTable}\`;\n`
+        : `-- Write your GoogleSQL (BigQuery) query statement below\n`,
+      mysql: primaryTable
+        ? `# Write your MySQL query statement below\nSELECT \nFROM ${primaryTable};\n`
+        : `# Write your MySQL query statement below\n`,
+    },
+  };
+});
