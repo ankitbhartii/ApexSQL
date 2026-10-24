@@ -7,6 +7,7 @@ import alasql from 'alasql';
 import { Dialect, SqlProblem, TableSchema, LivePipelineStatus } from '../types';
 import { saveLiveProblemToCloud, loadLiveProblemsCloud } from '../firebase';
 import { AUTHENTIC_HACKERRANK_PROBLEMS } from './hackerrankQuestionsData';
+import { ALL_LEETCODE_PROBLEMS } from './leetcodeQuestionsData';
 
 // ============================================================================
 // PUBLIC CONTEST & INTERVIEW PLATFORM REPOSITORY
@@ -890,9 +891,9 @@ export class LiveQuestionPipeline {
       this.persistLocalCache();
     }
 
-    // 3. Always upgrade cached HackerRank questions with authentic schemas & descriptions
+    // 3. Always upgrade cached questions with authentic schemas & descriptions
     try {
-      AUTHENTIC_HACKERRANK_PROBLEMS.forEach((authProb) => {
+      [...AUTHENTIC_HACKERRANK_PROBLEMS, ...ALL_LEETCODE_PROBLEMS].forEach((authProb) => {
         const idx = this.problemsCache.findIndex((p) => p.id === authProb.id);
         if (idx >= 0) {
           this.problemsCache[idx] = authProb;

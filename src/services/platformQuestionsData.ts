@@ -98,8 +98,8 @@ export const SUPPORTED_PLATFORMS: PlatformInfo[] = [
     borderColor: 'border-indigo-500/30',
     badgeColor: 'bg-indigo-500/20 text-indigo-300',
     apiEndpoint: '/api/fetch-platform-questions?platform=all',
-    description: 'Unified stream aggregating Stack Overflow Interview Archive (10,000 Qs), DataDriven.io (928 Qs), LeetCode Database (323 Qs), HackerRank SQL Track (58 Qs), DataLemur (21 Qs), and FAANG case challenges.',
-    totalAvailable: 11330,
+    description: 'Unified stream aggregating Stack Overflow Interview Archive (10,000 Qs), DataDriven.io (928 Qs), LeetCode Database (105 Qs), HackerRank SQL Track (58 Qs), DataLemur (21 Qs), and FAANG case challenges.',
+    totalAvailable: 11112,
     companies: ['Google', 'Meta', 'Amazon', 'Apple', 'Uber', 'Netflix', 'Stripe', 'Goldman Sachs'],
   },
   {
@@ -147,15 +147,15 @@ export const SUPPORTED_PLATFORMS: PlatformInfo[] = [
   {
     id: 'leetcode',
     name: 'LeetCode',
-    tagline: '323 SQL Questions (105 Free · 218 Premium)',
+    tagline: '105 Authentic SQL Interview Problems',
     icon: '🟡',
     color: 'text-amber-400',
     bgLight: 'bg-amber-500/10',
     borderColor: 'border-amber-500/30',
     badgeColor: 'bg-amber-500/20 text-amber-300',
     apiEndpoint: 'https://leetcode.com/graphql',
-    description: 'Official LeetCode SQL database catalog spanning 105 Free SQL challenges, 218 Premium interview problems, and Top SQL 50 curated tracks with authentic schemas.',
-    totalAvailable: 323,
+    description: 'All 105 authentic official LeetCode SQL database problems with exact table schemas, test inputs, clear problem instructions, and verified solutions.',
+    totalAvailable: 105,
     companies: ['Amazon', 'Apple', 'Bloomberg', 'Microsoft', 'Oracle', 'Google', 'Meta'],
   },
   {
@@ -3161,12 +3161,11 @@ const DEPRECATED_HACKERRANK_PROBLEMS: SqlProblem[] = [
   }
 ];
 
-// 323 Official LeetCode Database Problems (105 Free · 218 Premium · 50 Top SQL 50)
+// 105 Authentic Official LeetCode Database Problems (with real schemas, test inputs, and instructions)
 import {
   ALL_LEETCODE_PROBLEMS,
   ALL_LEETCODE_FREE_PROBLEMS,
   ALL_LEETCODE_TOP50_PROBLEMS,
-  ALL_LEETCODE_PREMIUM_PROBLEMS,
 } from './leetcodeQuestionsData';
 import { ALL_DATADRIVEN_PROBLEMS } from './datadrivenQuestionsData';
 import { ALL_STACKOVERFLOW_PROBLEMS } from './stackoverflowQuestionsData';
@@ -3176,13 +3175,12 @@ export {
   ALL_LEETCODE_PROBLEMS,
   ALL_LEETCODE_FREE_PROBLEMS,
   ALL_LEETCODE_TOP50_PROBLEMS,
-  ALL_LEETCODE_PREMIUM_PROBLEMS,
   ALL_DATADRIVEN_PROBLEMS,
   ALL_STACKOVERFLOW_PROBLEMS,
   ALL_DATALEMUR_PROBLEMS,
 };
 
-// Master Consolidated Multi-Platform Catalog (11,330 Total: 10,000 Stack Overflow + 58 HackerRank + 323 LeetCode + 928 DataDriven.io + 21 DataLemur)
+// Master Consolidated Multi-Platform Catalog (11,112 Total: 10,000 Stack Overflow + 58 HackerRank + 105 LeetCode + 928 DataDriven.io + 21 DataLemur)
 export const AUTHENTIC_PLATFORM_PROBLEMS: SqlProblem[] = [
   ...ALL_STACKOVERFLOW_PROBLEMS,
   ...ALL_HACKERRANK_PROBLEMS,
