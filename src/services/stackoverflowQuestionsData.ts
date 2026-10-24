@@ -505,10 +505,10 @@ export function generateAllStackOverflowProblems(): SqlProblem[] {
         tier3Skeleton: arch.tier3Skeleton,
       },
       starterCodeByDialect: {
-        postgres: arch.starterSql,
-        snowflake: arch.starterSql,
-        bigquery: arch.starterSql,
-        mysql: arch.starterSql,
+        postgres: '-- Write your PostgreSQL query statement below\n',
+        snowflake: '-- Write your Snowflake SQL query statement below\n',
+        bigquery: '-- Write your GoogleSQL (BigQuery) query statement below\n',
+        mysql: '# Write your MySQL query statement below\n',
       },
       officialSolutionByDialect: {
         postgres: arch.solutionSql,

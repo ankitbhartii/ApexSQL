@@ -436,6 +436,8 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
       filtered = filtered.filter((p) => p.platform === 'HackerRank');
     } else if (platform === 'datadriven') {
       filtered = filtered.filter((p) => p.platform === 'DataDriven');
+    } else if (platform === 'datalemur') {
+      filtered = filtered.filter((p) => p.platform === 'DataLemur');
     } else if (platform === 'stratascratch') {
       filtered = filtered.filter((p) => p.platform === 'FAANG+ Mock');
     }

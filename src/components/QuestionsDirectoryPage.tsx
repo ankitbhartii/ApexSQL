@@ -11,7 +11,11 @@ import {
   ALL_STACKOVERFLOW_PROBLEMS,
   ALL_DATADRIVEN_PROBLEMS,
   ALL_LEETCODE_PROBLEMS,
+  ALL_LEETCODE_FREE_PROBLEMS,
+  ALL_LEETCODE_TOP50_PROBLEMS,
   ALL_HACKERRANK_PROBLEMS,
+  ALL_DATALEMUR_PROBLEMS,
+  ALL_STRATASCRATCH_PROBLEMS,
   SUPPORTED_PLATFORMS,
 } from '../services/platformQuestionsData';
 
@@ -21,7 +25,7 @@ interface QuestionsDirectoryPageProps {
   solvedMap: Record<string, any>;
 }
 
-type PlatformFilter = 'all' | 'stackoverflow' | 'datadriven' | 'leetcode' | 'hackerrank' | 'stratascratch';
+type PlatformFilter = 'all' | 'stackoverflow' | 'datadriven' | 'leetcode' | 'hackerrank' | 'datalemur' | 'stratascratch';
 
 export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
   onSelectProblem,
@@ -29,6 +33,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
   solvedMap,
 }) => {
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformFilter>('all');
+  const [leetcodeSubFilter, setLeetcodeSubFilter] = useState<'all' | 'top50'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
@@ -45,16 +50,19 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
       case 'datadriven':
         return ALL_DATADRIVEN_PROBLEMS;
       case 'leetcode':
+        if (leetcodeSubFilter === 'top50') return ALL_LEETCODE_TOP50_PROBLEMS;
         return ALL_LEETCODE_PROBLEMS;
       case 'hackerrank':
         return ALL_HACKERRANK_PROBLEMS;
+      case 'datalemur':
+        return ALL_DATALEMUR_PROBLEMS;
       case 'stratascratch':
-        return AUTHENTIC_PLATFORM_PROBLEMS.filter((p) => p.platform === 'FAANG+ Mock');
+        return ALL_STRATASCRATCH_PROBLEMS;
       case 'all':
       default:
         return AUTHENTIC_PLATFORM_PROBLEMS;
     }
-  }, [selectedPlatform]);
+  }, [selectedPlatform, leetcodeSubFilter]);
 
   // Extract unique companies & topics for dropdown filters
   const allCompanies = useMemo(() => {
@@ -198,7 +206,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
       {/* Main Container */}
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 flex flex-col space-y-5">
         {/* Platform Selection Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
           <motion.button
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
@@ -212,7 +220,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             <div className="flex items-center justify-between mb-1">
               <span className="text-xl">🌐</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                11,309 Qs
+                11,162 Qs
               </span>
             </div>
             <div>
@@ -278,12 +286,12 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             <div className="flex items-center justify-between mb-1">
               <span className="text-xl">🟡</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                323 Qs
+                105 Qs
               </span>
             </div>
             <div>
               <div className="text-xs font-bold text-white">LeetCode</div>
-              <div className="text-[10px] text-slate-400">Database Complete 323</div>
+              <div className="text-[10px] text-slate-400">Official SQL Track</div>
             </div>
           </motion.button>
 
@@ -312,6 +320,28 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
           <motion.button
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
+            onClick={() => handlePlatformChange('datalemur')}
+            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+              selectedPlatform === 'datalemur'
+                ? 'bg-amber-600/20 border-amber-500 text-white shadow-lg ring-1 ring-amber-500'
+                : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xl">🐒</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                21 Qs
+              </span>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-white">DataLemur</div>
+              <div className="text-[10px] text-slate-400">FAANG & Tech Interviews</div>
+            </div>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ y: -2, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('stratascratch')}
             className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'stratascratch'
@@ -331,6 +361,44 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             </div>
           </motion.button>
         </div>
+
+        {/* LeetCode Sub-Filter Pill Bar */}
+        {selectedPlatform === 'leetcode' && (
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex-wrap gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <span className="text-sm">🟡</span> LeetCode Track:
+              </span>
+              <div className="inline-flex bg-slate-950 rounded-xl p-1 border border-slate-800">
+                <button
+                  onClick={() => { setLeetcodeSubFilter('all'); setCurrentPage(1); }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    leetcodeSubFilter === 'all'
+                      ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All SQL (105)
+                </button>
+                <button
+                  onClick={() => { setLeetcodeSubFilter('top50'); setCurrentPage(1); }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    leetcodeSubFilter === 'top50'
+                      ? 'bg-indigo-500 text-white shadow-md font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>⭐</span> Top SQL 50 (50)
+                </button>
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-400 font-medium">
+              {leetcodeSubFilter === 'top50'
+                ? 'Showing the official 50 curated interview questions from LeetCode Top SQL 50 study plan.'
+                : 'Showing all 105 authentic official LeetCode SQL database questions with real schemas & instructions.'}
+            </div>
+          </div>
+        )}
 
         {/* Filter & Search Bar */}
         <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-3">
@@ -602,6 +670,12 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
                         bg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
                         icon: '🟢',
                       };
+                    } else if (q.platform === 'DataLemur') {
+                      platformBadge = {
+                        text: 'DataLemur',
+                        bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                        icon: '🐒',
+                      };
                     } else if (q.platform === 'Stack Overflow') {
                       platformBadge = {
                         text: 'Stack Overflow',
@@ -666,12 +740,19 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
 
                         {/* 3. Platform */}
                         <td className="px-4 py-3.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${platformBadge.bg}`}
-                          >
-                            <span>{platformBadge.icon}</span>
-                            <span>{platformBadge.text}</span>
-                          </span>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${platformBadge.bg}`}
+                            >
+                              <span>{platformBadge.icon}</span>
+                              <span>{platformBadge.text}</span>
+                            </span>
+                            {q.platform === 'LeetCode' && q.isTop50 && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                ⭐ Top 50
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* 4. Company */}

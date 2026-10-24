@@ -28,7 +28,7 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
   onToast,
   onOpenDirectory,
 }) => {
-  const [selectedPlatform, setSelectedPlatform] = useState<'all' | 'stackoverflow' | 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch'>('all');
+  const [selectedPlatform, setSelectedPlatform] = useState<'all' | 'stackoverflow' | 'leetcode' | 'hackerrank' | 'datadriven' | 'stratascratch' | 'datalemur'>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [fetchLimit, setFetchLimit] = useState<number | 'all'>('all');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -132,7 +132,7 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
               <label className="text-xs font-semibold text-slate-300 mb-2 block">
                 1. Select Target Platform:
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
                 {SUPPORTED_PLATFORMS.map((plat) => {
                   const isSelected = selectedPlatform === plat.id;
                   return (
@@ -271,6 +271,12 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
                           ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                           : prob.platform === 'HackerRank'
                           ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : prob.platform === 'DataLemur'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                          : prob.platform === 'DataDriven'
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                          : prob.platform === 'Stack Overflow'
+                          ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'
                           : 'bg-purple-500/20 text-purple-300 border-purple-500/30';
 
                       const diffColor =

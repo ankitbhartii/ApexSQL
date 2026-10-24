@@ -7,6 +7,10 @@ import alasql from 'alasql';
 import { Dialect, SqlProblem, TableSchema, LivePipelineStatus } from '../types';
 import { saveLiveProblemToCloud, loadLiveProblemsCloud } from '../firebase';
 import { AUTHENTIC_HACKERRANK_PROBLEMS } from './hackerrankQuestionsData';
+import { ALL_LEETCODE_PROBLEMS } from './leetcodeQuestionsData';
+import { ALL_DATALEMUR_PROBLEMS } from './datalemurQuestionsData';
+import { ALL_STRATASCRATCH_PROBLEMS } from './stratascratchQuestionsData';
+import { ALL_DATADRIVEN_PROBLEMS } from './datadrivenQuestionsData';
 
 // ============================================================================
 // PUBLIC CONTEST & INTERVIEW PLATFORM REPOSITORY
@@ -890,9 +894,15 @@ export class LiveQuestionPipeline {
       this.persistLocalCache();
     }
 
-    // 3. Always upgrade cached HackerRank questions with authentic schemas & descriptions
+    // 3. Always upgrade cached questions with authentic schemas & descriptions
     try {
-      AUTHENTIC_HACKERRANK_PROBLEMS.forEach((authProb) => {
+      [
+        ...AUTHENTIC_HACKERRANK_PROBLEMS,
+        ...ALL_LEETCODE_PROBLEMS,
+        ...ALL_DATALEMUR_PROBLEMS,
+        ...ALL_STRATASCRATCH_PROBLEMS,
+        ...ALL_DATADRIVEN_PROBLEMS,
+      ].forEach((authProb) => {
         const idx = this.problemsCache.findIndex((p) => p.id === authProb.id);
         if (idx >= 0) {
           this.problemsCache[idx] = authProb;
@@ -1029,18 +1039,10 @@ export class LiveQuestionPipeline {
       },
       hints: tpl.hints,
       starterCodeByDialect: {
-        postgres: schemas[0]?.tableName
-          ? `-- Write your PostgreSQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
-          : `-- Write your PostgreSQL query statement below\n`,
-        snowflake: schemas[0]?.tableName
-          ? `-- Write your Snowflake SQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
-          : `-- Write your Snowflake SQL query statement below\n`,
-        bigquery: schemas[0]?.tableName
-          ? `-- Write your GoogleSQL (BigQuery) query statement below\nSELECT \nFROM \`${schemas[0].tableName}\`;\n`
-          : `-- Write your GoogleSQL (BigQuery) query statement below\n`,
-        mysql: schemas[0]?.tableName
-          ? `# Write your MySQL query statement below\nSELECT \nFROM ${schemas[0].tableName};\n`
-          : `# Write your MySQL query statement below\n`,
+        postgres: '-- Write your PostgreSQL query statement below\n',
+        snowflake: '-- Write your Snowflake SQL query statement below\n',
+        bigquery: '-- Write your GoogleSQL (BigQuery) query statement below\n',
+        mysql: '# Write your MySQL query statement below\n',
       },
       officialSolutionByDialect: tpl.officialSolutionByDialect,
       deepDive: tpl.deepDive,

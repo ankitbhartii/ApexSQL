@@ -12,7 +12,7 @@ import {
 } from './platformQuestionsData';
 
 export interface FetchPlatformOptions {
-  platform: 'leetcode' | 'hackerrank' | 'datadriven' | 'stackoverflow' | 'stratascratch' | 'all';
+  platform: 'leetcode' | 'hackerrank' | 'datadriven' | 'stackoverflow' | 'stratascratch' | 'datalemur' | 'all';
   limit?: number | 'all';
   difficulty?: 'All' | 'Easy' | 'Medium' | 'Hard';
 }
@@ -72,6 +72,8 @@ export async function fetchPlatformQuestions(
       filtered = filtered.filter((p) => p.platform === 'HackerRank');
     } else if (platform === 'datadriven') {
       filtered = filtered.filter((p) => p.platform === 'DataDriven');
+    } else if (platform === 'datalemur') {
+      filtered = filtered.filter((p) => p.platform === 'DataLemur');
     } else if (platform === 'stratascratch') {
       filtered = filtered.filter((p) => p.platform === 'FAANG+ Mock');
     }
