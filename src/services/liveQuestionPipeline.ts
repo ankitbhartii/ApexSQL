@@ -4,6 +4,7 @@
  */
 
 import alasql from 'alasql';
+import { validateSafeSqlQuery } from '../utils/sqlSanitizer';
 import { Dialect, SqlProblem, TableSchema, LivePipelineStatus } from '../types';
 import { saveLiveProblemToCloud, loadLiveProblemsCloud } from '../firebase';
 import { AUTHENTIC_HACKERRANK_PROBLEMS } from './hackerrankQuestionsData';
@@ -1000,17 +1001,20 @@ export class LiveQuestionPipeline {
     try {
       const db = new alasql.Database();
       tpl.tables.forEach((t) => {
-        const colDefs = t.columns.map((c) => `${c.name} ${c.type || 'STRING'}`).join(', ');
-        db.exec(`CREATE TABLE ${t.tableName} (${colDefs});`);
+        const colDefs = t.columns.map((c) => `[${c.name}] ${c.type || 'STRING'}`).join(', ');
+        db.exec(`CREATE TABLE [${t.tableName}] (${colDefs});`);
         if (t.rows && t.rows.length > 0) {
-          db.exec(`INSERT INTO ${t.tableName} VALUES ?`, [t.rows]);
+          db.exec(`INSERT INTO [${t.tableName}] SELECT * FROM ?`, [t.rows]);
         }
       });
 
-      const res = db.exec(tpl.sqlReference);
-      if (Array.isArray(res) && res.length > 0) {
-        expRows = res;
-        expCols = Object.keys(res[0]);
+      const validation = validateSafeSqlQuery(tpl.sqlReference, { allowDml: false });
+      if (validation.isSafe) {
+        const res = db.exec(validation.sanitizedSql);
+        if (Array.isArray(res) && res.length > 0) {
+          expRows = res;
+          expCols = Object.keys(res[0]);
+        }
       }
     } catch {
       // If AlaSQL in-memory parse differs, fallback to deterministic sample rows

@@ -4,6 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { secureRandomUUID } from '../utils/cryptoUtils';
 import {
   auth,
   googleProvider,
@@ -185,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginAsGuest = useCallback((displayName = 'Candidate Guest', role = 'Data Analyst') => {
     const guestUser = {
-      uid: 'guest-' + Math.random().toString(36).substring(2, 9),
+      uid: 'guest-' + secureRandomUUID(),
       email: 'guest@candidate.local',
       displayName,
       photoURL: '',
@@ -207,11 +208,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await firebaseSignOut(auth);
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
       setCurrentUser(null);
       setUserProfile(null);
       setSyncStatus('idle');
-    } catch (err) {
-      console.error('Logout failed:', err);
+      try {
+        localStorage.removeItem('apex_guest_user');
+        sessionStorage.removeItem('apex_guest_user');
+      } catch {}
     }
   }, []);
 
