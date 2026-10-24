@@ -423,7 +423,7 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
       }`}
     >
       {/* 1. LeetCode IDE Top Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[#090d18] border-b border-slate-800/80 text-xs select-none">
+      <div className="flex items-center justify-between px-3.5 py-2 apple-glass border-b border-white/10 text-xs select-none sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 font-mono text-cyan-300 font-bold text-[11px] shadow-xs">
             <Code2 className="w-3.5 h-3.5 text-cyan-400" />

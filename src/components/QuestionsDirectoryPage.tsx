@@ -211,7 +211,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('all')}
-            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+            className={`apple-card p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'all'
                 ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg ring-1 ring-indigo-500'
                 : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
@@ -233,7 +233,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('stackoverflow')}
-            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+            className={`apple-card p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'stackoverflow'
                 ? 'bg-orange-600/20 border-orange-500 text-white shadow-lg ring-1 ring-orange-500'
                 : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
@@ -255,7 +255,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('datadriven')}
-            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+            className={`apple-card p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'datadriven'
                 ? 'bg-cyan-600/20 border-cyan-500 text-white shadow-lg ring-1 ring-cyan-500'
                 : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
@@ -277,7 +277,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('leetcode')}
-            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+            className={`apple-card p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'leetcode'
                 ? 'bg-amber-600/20 border-amber-500 text-white shadow-lg ring-1 ring-amber-500'
                 : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
@@ -299,7 +299,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('hackerrank')}
-            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+            className={`apple-card p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'hackerrank'
                 ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-lg ring-1 ring-emerald-500'
                 : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
@@ -321,7 +321,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('datalemur')}
-            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+            className={`apple-card p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'datalemur'
                 ? 'bg-amber-600/20 border-amber-500 text-white shadow-lg ring-1 ring-amber-500'
                 : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
@@ -343,7 +343,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePlatformChange('stratascratch')}
-            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+            className={`apple-card p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer ${
               selectedPlatform === 'stratascratch'
                 ? 'bg-purple-600/20 border-purple-500 text-white shadow-lg ring-1 ring-purple-500'
                 : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
@@ -364,31 +364,45 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
 
         {/* LeetCode Sub-Filter Pill Bar */}
         {selectedPlatform === 'leetcode' && (
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex-wrap gap-2.5">
+          <div className="flex items-center justify-between p-3 rounded-2xl apple-card border border-amber-500/25 flex-wrap gap-2.5">
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                 <span className="text-sm">🟡</span> LeetCode Track:
               </span>
-              <div className="inline-flex bg-slate-950 rounded-xl p-1 border border-slate-800">
+              <div className="relative inline-flex p-1 apple-pill-bar">
                 <button
                   onClick={() => { setLeetcodeSubFilter('all'); setCurrentPage(1); }}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-colors duration-150 select-none ${
                     leetcodeSubFilter === 'all'
-                      ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'text-white font-bold'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   All SQL (105)
+                  {leetcodeSubFilter === 'all' && (
+                    <motion.div
+                      layoutId="leetcodeSubPill"
+                      className="absolute inset-0 rounded-full apple-pill-active -z-10"
+                      transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
+                    />
+                  )}
                 </button>
                 <button
                   onClick={() => { setLeetcodeSubFilter('top50'); setCurrentPage(1); }}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                  className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer flex items-center gap-1 transition-colors duration-150 select-none ${
                     leetcodeSubFilter === 'top50'
-                      ? 'bg-indigo-500 text-white shadow-md font-bold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'text-white font-bold'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   <span>⭐</span> Top SQL 50 (50)
+                  {leetcodeSubFilter === 'top50' && (
+                    <motion.div
+                      layoutId="leetcodeSubPill"
+                      className="absolute inset-0 rounded-full apple-pill-active -z-10"
+                      transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
+                    />
+                  )}
                 </button>
               </div>
             </div>
@@ -427,60 +441,63 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             </div>
 
             {/* Difficulty Filter */}
-            <div className="inline-flex bg-slate-950 rounded-xl p-1 border border-slate-800 shrink-0">
-              {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
-                <button
-                  key={diff}
-                  onClick={() => {
-                    setDifficultyFilter(diff);
-                    setCurrentPage(1);
-                  }}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    difficultyFilter === diff
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {diff}
-                </button>
-              ))}
+            <div className="relative inline-flex p-1 apple-pill-bar shrink-0">
+              {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => {
+                const isActive = difficultyFilter === diff;
+                return (
+                  <button
+                    key={diff}
+                    onClick={() => {
+                      setDifficultyFilter(diff);
+                      setCurrentPage(1);
+                    }}
+                    className={`relative z-10 px-3 py-1 rounded-full text-xs font-semibold transition-colors duration-150 cursor-pointer select-none ${
+                      isActive ? 'text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {diff}
+                    {isActive && (
+                      <motion.div
+                        layoutId="diffFilterPill"
+                        className="absolute inset-0 rounded-full apple-pill-active -z-10"
+                        transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Solved Status Filter */}
-            <div className="inline-flex bg-slate-950 rounded-xl p-1 border border-slate-800 shrink-0">
-              <button
-                onClick={() => {
-                  setStatusFilter('all');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  statusFilter === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                All Status
-              </button>
-              <button
-                onClick={() => {
-                  setStatusFilter('solved');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  statusFilter === 'solved' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                ✓ Solved
-              </button>
-              <button
-                onClick={() => {
-                  setStatusFilter('unsolved');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  statusFilter === 'unsolved' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Unsolved
-              </button>
+            <div className="relative inline-flex p-1 apple-pill-bar shrink-0">
+              {[
+                { id: 'all', label: 'All Status' },
+                { id: 'solved', label: '✓ Solved' },
+                { id: 'unsolved', label: 'Unsolved' },
+              ].map((s) => {
+                const isActive = statusFilter === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setStatusFilter(s.id as any);
+                      setCurrentPage(1);
+                    }}
+                    className={`relative z-10 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors duration-150 cursor-pointer select-none ${
+                      isActive ? 'text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {s.label}
+                    {isActive && (
+                      <motion.div
+                        layoutId="statusFilterPill"
+                        className="absolute inset-0 rounded-full apple-pill-active -z-10"
+                        transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -617,10 +634,10 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
         </div>
 
         {/* Question Cards / Table List */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div className="apple-card border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 border-b border-slate-850 text-slate-400 font-mono text-[11px] uppercase tracking-wider">
+              <thead className="apple-glass border-b border-white/10 text-slate-300 font-mono text-[11px] uppercase tracking-wider sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-3 w-16 text-center"># Serial</th>
                   <th className="px-4 py-3">Question Title & Scenario</th>
@@ -784,7 +801,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
                             onClick={() => onSelectProblem(q)}
-                            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-cyan-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 hover:shadow-cyan-500/20 border border-indigo-400/30 transition-all cursor-pointer mx-auto w-full active:scale-95"
+                            className="apple-btn-primary px-3 py-1.5 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer mx-auto w-full select-none"
                           >
                             <span>⚡</span>
                             <span>Solve Challenge</span>
