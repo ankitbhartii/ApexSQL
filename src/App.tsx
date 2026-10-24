@@ -1943,34 +1943,43 @@ export default function App() {
               <span className="font-extrabold text-sm tracking-tight text-white hidden sm:inline">ApexSQL</span>
             </div>
 
-            <nav className="inline-flex items-center p-0.5 bg-slate-950/80 rounded-full border border-white/[0.08] shadow-inner">
-              <button
-                onClick={() => {
-                  setCurrentView('sandbox');
-                  window.location.hash = '#/sandbox';
-                }}
-                className="h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
-              >
-                <span>⚡</span>
-                <span>Sandbox</span>
-              </button>
-              <button className="h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-sm">
-                <span>📚</span>
-                <span>Questions</span>
-                <span className="hidden sm:inline-block px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/30 text-cyan-200 font-mono">
-                  11,309
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  setCurrentView('profile');
-                  window.location.hash = '#/profile';
-                }}
-                className="h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200"
-              >
-                <span>📊</span>
-                <span>Profile</span>
-              </button>
+            <nav className="relative flex items-center p-1 apple-pill-bar shrink-0">
+              {[
+                { id: 'sandbox', label: 'Sandbox', icon: '⚡' },
+                { id: 'directory', label: 'Questions', icon: '📚', count: '11,162' },
+                { id: 'profile', label: 'Profile', icon: '📊' },
+              ].map((tab) => {
+                const isActive = currentView === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setCurrentView(tab.id as any);
+                      window.location.hash = tab.id === 'directory' ? '#/questions' : `#/${tab.id}`;
+                    }}
+                    className={`relative z-10 h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-colors duration-150 flex items-center gap-1.5 cursor-pointer whitespace-nowrap select-none ${
+                      isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <span>{tab.icon}</span>
+                    <span>{tab.label}</span>
+                    {tab.count && (
+                      <span className={`hidden sm:inline-block px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums transition-colors ${
+                        isActive ? 'bg-cyan-400/30 text-cyan-200' : 'bg-white/10 text-slate-400'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    )}
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeNavPill"
+                        className="absolute inset-0 rounded-full apple-pill-active -z-10"
+                        transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </nav>
           </div>
 
@@ -2053,54 +2062,45 @@ export default function App() {
             </span>
           </div>
 
-          {/* Apple Music Style Segmented Pill Control */}
-          <div className="inline-flex items-center p-0.5 bg-slate-950/80 rounded-full border border-white/[0.08] shrink-0 h-8 backdrop-blur-md shadow-inner">
-            <button
-              onClick={() => {
-                setCurrentView('sandbox');
-                window.location.hash = '#/sandbox';
-              }}
-              className={`px-2.5 lg:px-3 h-full rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
-                currentView === 'sandbox'
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-sm shadow-indigo-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <span>⚡</span>
-              <span>Sandbox</span>
-            </button>
-            <button
-              onClick={() => {
-                setCurrentView('directory');
-                window.location.hash = '#/questions';
-              }}
-              className={`px-2.5 lg:px-3 h-full rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
-                (currentView as string) === 'directory'
-                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-sm shadow-cyan-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <span>📚</span>
-              <span>Questions</span>
-              <span className="hidden xl:inline-block px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-400/20 text-cyan-200 font-mono leading-none">
-                11,309
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                setCurrentView('profile');
-                window.location.hash = '#/profile';
-              }}
-              className={`px-2.5 lg:px-3 h-full rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 ${
-                (currentView as string) === 'profile'
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-sm shadow-indigo-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <span>📊</span>
-              <span>Profile</span>
-            </button>
-          </div>
+          {/* Apple Segmented Pill Navigation */}
+          <nav className="relative flex items-center p-1 apple-pill-bar shrink-0">
+            {[
+              { id: 'sandbox', label: 'Sandbox', icon: '⚡' },
+              { id: 'directory', label: 'Questions', icon: '📚', count: '11,162' },
+              { id: 'profile', label: 'Profile', icon: '📊' },
+            ].map((tab) => {
+              const isActive = (currentView as string) === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setCurrentView(tab.id as any);
+                    window.location.hash = tab.id === 'directory' ? '#/questions' : `#/${tab.id}`;
+                  }}
+                  className={`relative z-10 h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-colors duration-150 flex items-center gap-1.5 cursor-pointer whitespace-nowrap select-none ${
+                    isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                  {tab.count && (
+                    <span className={`hidden xl:inline-block px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums transition-colors ${
+                      isActive ? 'bg-cyan-400/30 text-cyan-200' : 'bg-white/10 text-slate-400'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  )}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeNavPill"
+                      className="absolute inset-0 rounded-full apple-pill-active -z-10"
+                      transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
 
           {/* Mode Dropdown (Visible on xl+ screens) */}
           <div className="hidden xl:flex items-center shrink-0">
@@ -3416,19 +3416,37 @@ export default function App() {
         >
           {/* Editor Header Toolbar (Docked cleanly at top of right panel viewport) */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-[#0f172a] border-b border-slate-800 shrink-0 sticky top-0 z-20 shadow-xs">
-            {/* Dialect Dropdown */}
+            {/* Apple Segmented Dialect Selector */}
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-400">Dialect:</span>
-              <select
-                value={dialect}
-                onChange={(e) => setDialect(e.target.value as Dialect)}
-                className="bg-slate-900 border border-slate-700 text-indigo-300 rounded px-2.5 py-1 text-xs font-bold focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="postgres">PostgreSQL 15</option>
-                <option value="snowflake">Snowflake SQL</option>
-                <option value="bigquery">GoogleSQL (BigQuery)</option>
-                <option value="mysql">MySQL 8.0</option>
-              </select>
+              <span className="text-xs font-semibold text-slate-400 hidden xl:inline">Dialect:</span>
+              <div className="relative inline-flex items-center p-0.5 apple-pill-bar">
+                {[
+                  { id: 'postgres', label: 'PostgreSQL' },
+                  { id: 'snowflake', label: 'Snowflake' },
+                  { id: 'bigquery', label: 'BigQuery' },
+                  { id: 'mysql', label: 'MySQL' },
+                ].map((d) => {
+                  const isActive = dialect === d.id;
+                  return (
+                    <button
+                      key={d.id}
+                      onClick={() => setDialect(d.id as Dialect)}
+                      className={`relative z-10 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors duration-150 cursor-pointer select-none ${
+                        isActive ? 'text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {d.label}
+                      {isActive && (
+                        <motion.div
+                          layoutId="dialectPill"
+                          className="absolute inset-0 rounded-full apple-pill-active -z-10"
+                          transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Actions: Run, Format, Reset, Clear */}
@@ -3458,28 +3476,34 @@ export default function App() {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span className="font-medium text-slate-300">Draft Auto-Saved</span>
               </div>
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={handleRunQuery}
                 disabled={isExecuting}
-                className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-                title="Run query to preview output (Ctrl+Enter)"
+                className="apple-btn-secondary px-3.5 py-1.5 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 select-none shadow-xs"
+                title="Run query to preview output (Ctrl+Enter / ⌘+Enter)"
               >
                 <span>▶ Run</span>
-              </button>
-              <button
+                <kbd className="hidden sm:inline-block ml-0.5 px-1 py-0.2 text-[10px] rounded bg-white/10 text-slate-300 font-mono">⌘↵</kbd>
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={handleSubmitQuery}
                 disabled={isExecuting}
-                className="px-3.5 py-1 text-xs font-bold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white flex items-center gap-1.5 shadow-md shadow-emerald-600/25 transition cursor-pointer disabled:opacity-50"
-                title="Submit solution for full test evaluation (Ctrl+Shift+Enter)"
+                className="apple-btn-primary px-4 py-1.5 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 select-none"
+                title="Submit solution for full test evaluation (Ctrl+Shift+Enter / ⇧+⌘+Enter)"
               >
                 {isExecuting ? (
                   <span>Evaluating...</span>
                 ) : (
                   <>
                     <span>✓ Submit</span>
+                    <kbd className="hidden sm:inline-block ml-0.5 px-1.5 py-0.2 text-[10px] rounded bg-white/20 text-white font-mono">⇧⌘↵</kbd>
                   </>
                 )}
-              </button>
+              </motion.button>
             </div>
           </div>
 
@@ -3504,11 +3528,11 @@ export default function App() {
               {submissionVerdict && (
                 <motion.div
                   key={submissionVerdict.timestamp}
-                  initial={{ opacity: 0, y: -10, scale: 0.99 }}
+                  initial={{ opacity: 0, y: -8, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.99 }}
-                  transition={{ duration: 0.2 }}
-                  className={`rounded-xl p-4 border shadow-xl relative overflow-hidden ${
+                  exit={{ opacity: 0, y: -6, scale: 0.97, transition: { duration: 0.16, ease: [0.32, 0.72, 0, 1] } }}
+                  transition={{ type: 'spring', duration: 0.38, bounce: 0.14 }}
+                  className={`rounded-2xl p-4.5 border shadow-2xl relative overflow-hidden apple-glass ${
                     submissionVerdict.type === 'correct'
                       ? 'bg-[#0e1d16] border-emerald-500/40 text-emerald-100 ring-1 ring-emerald-500/20'
                       : submissionVerdict.type === 'compile_error'

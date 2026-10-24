@@ -89,11 +89,11 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
 
         {/* Modal Window */}
         <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 15 }}
+          initial={{ scale: 0.96, opacity: 0, y: 12 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 15 }}
-          transition={{ duration: 0.2 }}
-          className="relative w-full max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-750 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10"
+          exit={{ scale: 0.96, opacity: 0, y: 12, transition: { duration: 0.16, ease: [0.32, 0.72, 0, 1] } }}
+          transition={{ type: 'spring', duration: 0.35, bounce: 0.1 }}
+          className="relative w-full max-w-4xl max-h-[90vh] apple-glass border border-white/14 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10"
         >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-950/70">

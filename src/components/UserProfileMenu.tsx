@@ -73,8 +73,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
     return (
       <div className="flex items-center gap-1.5 shrink-0" ref={menuRef}>
         <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
           onClick={() => openAuthModal('signin')}
           className="h-8.5 px-3 rounded-full text-xs font-semibold text-slate-200 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-cyan-400/40 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
           title="Sign in to sync your SQL progress"
@@ -84,8 +83,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
         </motion.button>
 
         <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
           onClick={() => openAuthModal('signup')}
           className="relative group overflow-hidden h-8.5 px-3 rounded-full text-xs font-bold text-white bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 hover:from-indigo-400 hover:to-cyan-400 shadow-sm border border-indigo-400/30 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap hidden sm:inline-flex"
           title="Create a free candidate cloud profile"
@@ -107,8 +105,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
     <div className="relative shrink-0" ref={menuRef}>
       {/* Trigger Button - Apple Music Frosted Pill */}
       <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
         onClick={() => setIsOpen(!isOpen)}
         className="h-8.5 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 rounded-full bg-slate-900/85 hover:bg-slate-800/90 border border-white/10 hover:border-cyan-400/50 transition-all cursor-pointer text-left shrink-0 shadow-sm select-none"
         aria-label="User Profile Menu"
@@ -151,12 +148,12 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.96 }}
+            initial={{ opacity: 0, y: 6, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.96 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-[#0b1120]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/90 py-3 px-3 z-50 text-slate-200"
-          >
+            exit={{ opacity: 0, y: 6, scale: 0.96, transition: { duration: 0.16, ease: [0.32, 0.72, 0, 1] } }}
+            transition={{ type: 'spring', duration: 0.28, bounce: 0.08 }}
+            style={{ transformOrigin: 'top right' }}
+            className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] apple-glass border border-white/12 rounded-2xl shadow-2xl py-3 px-3 z-50 text-slate-200">
             {/* User Profile Card */}
             <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 mb-2.5">
               <div className="flex items-center gap-3">
