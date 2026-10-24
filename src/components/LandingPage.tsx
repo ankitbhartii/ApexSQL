@@ -151,8 +151,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       const elapsed = Math.round((performance.now() - start) * 100) / 100;
       setDemoOutput(Array.isArray(result) ? result : [result]);
       setDemoExecutionTime(elapsed || 1.8);
-    } catch (e: any) {
-      setDemoOutput([{ error: e.message || 'Execution error' }]);
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : 'Execution error';
+      setDemoOutput([{ error: errMsg }]);
       setDemoExecutionTime(0);
     } finally {
       setTimeout(() => setDemoRunning(false), 200);
@@ -388,7 +389,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <tbody className="divide-y divide-white/5">
                     {demoOutput.map((row, idx) => (
                       <tr key={idx} className="hover:bg-white/[0.04] transition-colors">
-                        {Object.values(row).map((val: any, cIdx) => (
+                        {Object.values(row).map((val: unknown, cIdx) => (
                           <td key={cIdx} className="px-3.5 py-2 text-slate-200">
                             {typeof val === 'number' ? val.toLocaleString() : String(val)}
                           </td>

@@ -1,4 +1,3 @@
-import { ApexLogo } from './ApexLogo';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -6,9 +5,10 @@ import { ApexLogo } from './ApexLogo';
 
 import React from 'react';
 import { motion } from 'motion/react';
+import { ArrowRight } from 'lucide-react';
+import { ApexLogo } from './ApexLogo';
 import { UserProfileMenu } from './UserProfileMenu';
 import { useAuth } from '../context/AuthContext';
-import { ArrowRight } from 'lucide-react';
 
 export type AppView = 'landing' | 'sandbox' | 'directory' | 'roadmaps' | 'studio' | 'profile' | 'auth';
 

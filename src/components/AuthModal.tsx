@@ -64,6 +64,17 @@ export const AuthModal: React.FC = () => {
     setDomainError(null);
   }, [authModalMode, isAuthModalOpen]);
 
+  // Handle Escape key to close modal
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isAuthModalOpen) {
+        closeAuthModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAuthModalOpen, closeAuthModal]);
+
   if (!isAuthModalOpen) return null;
 
   const roles = [
@@ -222,6 +233,9 @@ export const AuthModal: React.FC = () => {
 
       {/* Modal Dialog */}
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 12, transition: { duration: 0.16, ease: [0.32, 0.72, 0, 1] } }}

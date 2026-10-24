@@ -201,8 +201,9 @@ export const DatabaseStudioPage: React.FC<DatabaseStudioPageProps> = ({
       const capped = capQueryResults(rawRows);
       setScratchResult(capped.rows);
       setExecutionTime(elapsed || 1.2);
-    } catch (e: any) {
-      setScratchResult([{ error: e.message || 'Execution error' }]);
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : 'Execution error';
+      setScratchResult([{ error: errMsg }]);
       setExecutionTime(0);
     } finally {
       setTimeout(() => setIsExecuting(false), 150);
@@ -501,7 +502,7 @@ export const DatabaseStudioPage: React.FC<DatabaseStudioPageProps> = ({
                   <tbody className="divide-y divide-white/5">
                     {scratchResult.map((row, idx) => (
                       <tr key={idx} className="hover:bg-white/[0.04] transition-colors">
-                        {Object.values(row).map((val: any, cIdx) => (
+                        {Object.values(row).map((val: unknown, cIdx) => (
                           <td key={cIdx} className="px-3.5 py-2 text-slate-200">
                             {typeof val === 'number' ? val.toLocaleString() : String(val)}
                           </td>

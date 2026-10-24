@@ -36,6 +36,7 @@ import { GlobalNavbar, AppView } from './components/GlobalNavbar';
 import { AuthPage } from './components/AuthPage';
 import { ApexLogo } from './components/ApexLogo';
 import { SqlCodeEditor } from './components/SqlCodeEditor';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { MoreHorizontal } from 'lucide-react';
 import alasql from 'alasql';
 import { validateSafeSqlQuery, capQueryResults } from './utils/sqlSanitizer';
@@ -72,7 +73,7 @@ export interface SubmissionVerdict {
 
 function playSuccessChime() {
   try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext })?.webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const now = ctx.currentTime;
@@ -99,6 +100,11 @@ function playSuccessChime() {
     osc2.start(now + 0.1);
     osc1.stop(now + 0.6);
     osc2.stop(now + 0.6);
+
+    // Close AudioContext when playback finishes to prevent resource leaks
+    setTimeout(() => {
+      ctx.close().catch(() => {});
+    }, 700);
   } catch {
     // Non-blocking if audio context is restricted
   }
@@ -1370,89 +1376,45 @@ export default function App() {
     safeStorage.setItem('apex_current_problem_id', problem.id);
   }, [sqlCode, problem.id]);
 
-  // Persist navigation and filter preferences
+  // Persist navigation and filter preferences in cohesive batch
   useEffect(() => {
     safeStorage.setItem('apex_active_mode', activeMode);
-  }, [activeMode]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_active_topic', activeTopic);
-  }, [activeTopic]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_skill_tier', selectedSkillTier);
-  }, [selectedSkillTier]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_question_number', String(questionNumber));
-    setJumpInput(String(questionNumber));
-  }, [questionNumber]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_industry_domain', industryDomain);
-  }, [industryDomain]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_dialect', dialect);
-  }, [dialect]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_mobile_view', mobileView);
-  }, [mobileView]);
+  }, [activeMode, activeTopic, selectedSkillTier, questionNumber, industryDomain, dialect, mobileView]);
 
+  // Persist user progress collections
   useEffect(() => {
     if (Object.keys(solvedMap).length > 0) {
       safeStorage.setItem('apex_solved_problems', JSON.stringify(solvedMap));
     }
-  }, [solvedMap]);
-
-  useEffect(() => {
     if (masteredList.length > 0) {
       safeStorage.setItem('apex_mastered_problems', JSON.stringify(masteredList));
     }
-  }, [masteredList]);
-
-  useEffect(() => {
     if (reviewList.length > 0) {
       safeStorage.setItem('apex_review_problems', JSON.stringify(reviewList));
     }
-  }, [reviewList]);
-
-  useEffect(() => {
     if (Object.keys(notesMap).length > 0) {
       safeStorage.setItem('apex_problem_notes', JSON.stringify(notesMap));
     }
-  }, [notesMap]);
+  }, [solvedMap, masteredList, reviewList, notesMap]);
 
+  // Persist UI panel visibility and last execution results
   useEffect(() => {
     safeStorage.setItem('apex_console_tab', consoleTab);
-  }, [consoleTab]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_data_explorer_tab', dataExplorerTab);
-  }, [dataExplorerTab]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_revealed_hint_tier', String(revealedHintTier));
-  }, [revealedHintTier]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_is_notes_open', String(isNotesOpen));
-  }, [isNotesOpen]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_is_solution_open', String(isSolutionOpen));
-  }, [isSolutionOpen]);
-
-  useEffect(() => {
     safeStorage.setItem('apex_is_deep_dive_open', String(isDeepDiveOpen));
-  }, [isDeepDiveOpen]);
-
-  useEffect(() => {
     if (executionResult) {
       safeStorage.setItem('apex_last_execution_result', JSON.stringify(executionResult));
     }
-  }, [executionResult]);
+  }, [consoleTab, dataExplorerTab, revealedHintTier, isNotesOpen, isSolutionOpen, isDeepDiveOpen, executionResult]);
 
   // Subscribe to live pipeline & Firestore real-time updates
   useEffect(() => {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SqlProblem } from '../types';
 import {
@@ -35,6 +35,17 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
   const [fetchedProblems, setFetchedProblems] = useState<SqlProblem[]>([]);
   const [hasSearched, setHasSearched] = useState<boolean>(false);
+
+  // Close on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const handleFetch = async () => {
     setIsLoading(true);
@@ -89,6 +100,9 @@ export const PlatformFetchModal: React.FC<PlatformFetchModalProps> = ({
 
         {/* Modal Window */}
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="platform-fetch-modal-title"
           initial={{ scale: 0.96, opacity: 0, y: 12 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.96, opacity: 0, y: 12, transition: { duration: 0.16, ease: [0.32, 0.72, 0, 1] } }}

@@ -58,8 +58,8 @@ interface RateLimitRecord {
 }
 const rateLimitBuckets = new Map<string, RateLimitRecord>();
 
-// Clean up expired buckets periodically
-setInterval(() => {
+// Clean up expired buckets periodically (unref timer to allow clean shutdown)
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, record] of rateLimitBuckets.entries()) {
     if (now > record.resetTime) {
@@ -67,6 +67,9 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+if (cleanupTimer.unref) {
+  cleanupTimer.unref();
+}
 
 function createRateLimiter(options: { windowMs: number; maxRequests: number; message: string }) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {

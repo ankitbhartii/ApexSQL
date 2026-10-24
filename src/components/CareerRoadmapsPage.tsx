@@ -252,7 +252,7 @@ export const CareerRoadmapsPage: React.FC<CareerRoadmapsPageProps> = ({
       stepNumber: i + 1,
       title: p.title,
       concept: p.topic.replace(/_/g, ' ').toUpperCase(),
-      difficulty: p.difficulty as any,
+      difficulty: (p.difficulty === 'Easy' || p.difficulty === 'Hard') ? p.difficulty : 'Medium',
       company: p.companyTag || 'FAANG',
       problem: p
     }));
