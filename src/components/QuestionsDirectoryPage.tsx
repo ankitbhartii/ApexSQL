@@ -11,6 +11,9 @@ import {
   ALL_STACKOVERFLOW_PROBLEMS,
   ALL_DATADRIVEN_PROBLEMS,
   ALL_LEETCODE_PROBLEMS,
+  ALL_LEETCODE_FREE_PROBLEMS,
+  ALL_LEETCODE_TOP50_PROBLEMS,
+  ALL_LEETCODE_PREMIUM_PROBLEMS,
   ALL_HACKERRANK_PROBLEMS,
   ALL_DATALEMUR_PROBLEMS,
   SUPPORTED_PLATFORMS,
@@ -30,6 +33,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
   solvedMap,
 }) => {
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformFilter>('all');
+  const [leetcodeSubFilter, setLeetcodeSubFilter] = useState<'all' | 'free' | 'top50' | 'premium'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
@@ -46,6 +50,9 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
       case 'datadriven':
         return ALL_DATADRIVEN_PROBLEMS;
       case 'leetcode':
+        if (leetcodeSubFilter === 'free') return ALL_LEETCODE_FREE_PROBLEMS;
+        if (leetcodeSubFilter === 'top50') return ALL_LEETCODE_TOP50_PROBLEMS;
+        if (leetcodeSubFilter === 'premium') return ALL_LEETCODE_PREMIUM_PROBLEMS;
         return ALL_LEETCODE_PROBLEMS;
       case 'hackerrank':
         return ALL_HACKERRANK_PROBLEMS;
@@ -57,7 +64,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
       default:
         return AUTHENTIC_PLATFORM_PROBLEMS;
     }
-  }, [selectedPlatform]);
+  }, [selectedPlatform, leetcodeSubFilter]);
 
   // Extract unique companies & topics for dropdown filters
   const allCompanies = useMemo(() => {
@@ -286,7 +293,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             </div>
             <div>
               <div className="text-xs font-bold text-white">LeetCode</div>
-              <div className="text-[10px] text-slate-400">Database Complete 323</div>
+              <div className="text-[10px] text-slate-400">105 Free · 218 Premium</div>
             </div>
           </motion.button>
 
@@ -356,6 +363,68 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             </div>
           </motion.button>
         </div>
+
+        {/* LeetCode Sub-Filter Pill Bar */}
+        {selectedPlatform === 'leetcode' && (
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex-wrap gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <span className="text-sm">🟡</span> LeetCode SQL Filter:
+              </span>
+              <div className="inline-flex bg-slate-950 rounded-xl p-1 border border-slate-800">
+                <button
+                  onClick={() => { setLeetcodeSubFilter('all'); setCurrentPage(1); }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    leetcodeSubFilter === 'all'
+                      ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All SQL (323)
+                </button>
+                <button
+                  onClick={() => { setLeetcodeSubFilter('free'); setCurrentPage(1); }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    leetcodeSubFilter === 'free'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>✨</span> Free SQL (105)
+                </button>
+                <button
+                  onClick={() => { setLeetcodeSubFilter('top50'); setCurrentPage(1); }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    leetcodeSubFilter === 'top50'
+                      ? 'bg-indigo-500 text-white shadow-md font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>⭐</span> Top SQL 50 (50)
+                </button>
+                <button
+                  onClick={() => { setLeetcodeSubFilter('premium'); setCurrentPage(1); }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    leetcodeSubFilter === 'premium'
+                      ? 'bg-purple-500 text-white shadow-md font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>🔒</span> Premium SQL (218)
+                </button>
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-400 font-medium">
+              {leetcodeSubFilter === 'free'
+                ? 'Showing 105 Free SQL questions available on LeetCode without subscription.'
+                : leetcodeSubFilter === 'top50'
+                ? 'Showing official 50 curated interview questions from LeetCode Top SQL 50 study plan.'
+                : leetcodeSubFilter === 'premium'
+                ? 'Showing 218 LeetCode Premium interview problems.'
+                : 'Showing all 323 official LeetCode Database SQL questions (105 Free + 218 Premium).'}
+            </div>
+          </div>
+        )}
 
         {/* Filter & Search Bar */}
         <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-3">
@@ -697,12 +766,32 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
 
                         {/* 3. Platform */}
                         <td className="px-4 py-3.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${platformBadge.bg}`}
-                          >
-                            <span>{platformBadge.icon}</span>
-                            <span>{platformBadge.text}</span>
-                          </span>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${platformBadge.bg}`}
+                            >
+                              <span>{platformBadge.icon}</span>
+                              <span>{platformBadge.text}</span>
+                            </span>
+                            {q.platform === 'LeetCode' && (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span
+                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
+                                    q.isPaidOnly
+                                      ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                  }`}
+                                >
+                                  {q.isPaidOnly ? '🔒 Premium' : '✨ Free'}
+                                </span>
+                                {q.isTop50 && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    ⭐ Top 50
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </td>
 
                         {/* 4. Company */}

@@ -127,6 +127,8 @@ export interface SqlProblem {
   ingestedAt?: string;
   isLiveAutoIngested?: boolean;
   companyTag?: string;
+  isPaidOnly?: boolean;
+  isTop50?: boolean;
   // Google Search Grounding Metadata
   webSearchQueries?: string[];
   groundingCitations?: { title: string; url: string; snippet?: string }[];
