@@ -8,6 +8,9 @@ import { Dialect, SqlProblem, TableSchema, LivePipelineStatus } from '../types';
 import { saveLiveProblemToCloud, loadLiveProblemsCloud } from '../firebase';
 import { AUTHENTIC_HACKERRANK_PROBLEMS } from './hackerrankQuestionsData';
 import { ALL_LEETCODE_PROBLEMS } from './leetcodeQuestionsData';
+import { ALL_DATALEMUR_PROBLEMS } from './datalemurQuestionsData';
+import { ALL_STRATASCRATCH_PROBLEMS } from './stratascratchQuestionsData';
+import { ALL_DATADRIVEN_PROBLEMS } from './datadrivenQuestionsData';
 
 // ============================================================================
 // PUBLIC CONTEST & INTERVIEW PLATFORM REPOSITORY
@@ -893,7 +896,13 @@ export class LiveQuestionPipeline {
 
     // 3. Always upgrade cached questions with authentic schemas & descriptions
     try {
-      [...AUTHENTIC_HACKERRANK_PROBLEMS, ...ALL_LEETCODE_PROBLEMS].forEach((authProb) => {
+      [
+        ...AUTHENTIC_HACKERRANK_PROBLEMS,
+        ...ALL_LEETCODE_PROBLEMS,
+        ...ALL_DATALEMUR_PROBLEMS,
+        ...ALL_STRATASCRATCH_PROBLEMS,
+        ...ALL_DATADRIVEN_PROBLEMS,
+      ].forEach((authProb) => {
         const idx = this.problemsCache.findIndex((p) => p.id === authProb.id);
         if (idx >= 0) {
           this.problemsCache[idx] = authProb;

@@ -15,6 +15,7 @@ import {
   ALL_LEETCODE_TOP50_PROBLEMS,
   ALL_HACKERRANK_PROBLEMS,
   ALL_DATALEMUR_PROBLEMS,
+  ALL_STRATASCRATCH_PROBLEMS,
   SUPPORTED_PLATFORMS,
 } from '../services/platformQuestionsData';
 
@@ -56,7 +57,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
       case 'datalemur':
         return ALL_DATALEMUR_PROBLEMS;
       case 'stratascratch':
-        return AUTHENTIC_PLATFORM_PROBLEMS.filter((p) => p.platform === 'FAANG+ Mock');
+        return ALL_STRATASCRATCH_PROBLEMS;
       case 'all':
       default:
         return AUTHENTIC_PLATFORM_PROBLEMS;
@@ -219,7 +220,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             <div className="flex items-center justify-between mb-1">
               <span className="text-xl">🌐</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                11,112 Qs
+                11,162 Qs
               </span>
             </div>
             <div>
