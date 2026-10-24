@@ -1,3 +1,5 @@
+import { ApexLogo } from './ApexLogo';
+import confetti from 'canvas-confetti';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -95,6 +97,7 @@ export const AuthModal: React.FC = () => {
     setDomainError(null);
     try {
       await loginWithGoogle();
+      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
       setSuccessMessage('Successfully signed in with Google!');
       setTimeout(() => {
         closeAuthModal();
@@ -232,9 +235,7 @@ export const AuthModal: React.FC = () => {
         {/* Header Bar */}
         <div className="relative px-6 pt-6 pb-4 border-b border-slate-800 bg-slate-900/90 flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold text-lg">
-              <Database className="w-5 h-5 text-cyan-100" />
-            </div>
+            <ApexLogo size="sm" showText={false} showBadge={false} />
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-slate-100 tracking-tight">

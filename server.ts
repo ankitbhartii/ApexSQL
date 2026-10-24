@@ -17,7 +17,95 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
-app.use(express.json());
+app.disable('x-powered-by');
+
+// ============================================================================
+// SECURITY HEADERS & CORS HARDENING (OWASP Top 10 Defensive Controls)
+// ============================================================================
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+  // Controlled CORS policy: allow local development and same origin
+  const origin = req.headers.origin;
+  if (origin) {
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Max-Age', '86400');
+    }
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+// Enforce request body size limit to prevent memory exhaustion DoS
+app.use(express.json({ limit: '100kb' }));
+
+// ============================================================================
+// RATE LIMITING PROTECTION (Anti-DoS / Anti-Brute-Force)
+// ============================================================================
+interface RateLimitRecord {
+  count: number;
+  resetTime: number;
+}
+const rateLimitBuckets = new Map<string, RateLimitRecord>();
+
+// Clean up expired buckets periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitBuckets.entries()) {
+    if (now > record.resetTime) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+function createRateLimiter(options: { windowMs: number; maxRequests: number; message: string }) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown_client';
+    const key = `${req.baseUrl || ''}${req.path}:${ip}`;
+    const now = Date.now();
+    const record = rateLimitBuckets.get(key);
+
+    if (!record || now > record.resetTime) {
+      rateLimitBuckets.set(key, { count: 1, resetTime: now + options.windowMs });
+      return next();
+    }
+
+    record.count++;
+    if (record.count > options.maxRequests) {
+      const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({
+        success: false,
+        error: options.message,
+        retryAfter,
+      });
+    }
+
+    next();
+  };
+}
+
+const platformQuestionsLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 60,
+  message: 'Rate limit exceeded: Maximum 60 platform requests per minute. Please try again later.',
+});
+
+const searchGroundingLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 25,
+  message: 'Rate limit exceeded: Maximum 25 search grounding requests per minute. Please try again later.',
+});
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = '0.0.0.0';
@@ -420,43 +508,60 @@ app.get('/api/platforms', (req, res) => {
 });
 
 // 3. Multi-Platform Questions Fetching Endpoint (LeetCode, HackerRank, StrataScratch)
-app.post('/api/fetch-platform-questions', async (req, res) => {
+const ALLOWED_PLATFORMS = new Set(['all', 'leetcode', 'hackerrank', 'datadriven', 'datalemur', 'stratascratch', 'stackoverflow']);
+const ALLOWED_DIFFICULTIES = new Set(['all', 'easy', 'medium', 'hard']);
+
+app.post('/api/fetch-platform-questions', platformQuestionsLimiter, async (req, res) => {
   const { platform = 'all', limit = 5, difficulty = 'All' } = req.body || {};
+  
+  // Input Validation & Sanitization
+  const safePlatform = typeof platform === 'string' && ALLOWED_PLATFORMS.has(platform.toLowerCase())
+    ? platform.toLowerCase()
+    : 'all';
+
+  const safeDifficulty = typeof difficulty === 'string' && ALLOWED_DIFFICULTIES.has(difficulty.toLowerCase())
+    ? (difficulty.charAt(0).toUpperCase() + difficulty.slice(1).toLowerCase())
+    : 'All';
+
   const isAll = limit === 'all' || limit === 0 || limit === '0' || parseInt(String(limit), 10) >= 900;
+  const parsedLimit = parseInt(String(limit), 10);
+  const boundedLimit = isAll ? 1000 : Math.min(Math.max(Number.isInteger(parsedLimit) ? parsedLimit : 5, 1), 100);
 
   let filtered = AUTHENTIC_PLATFORM_PROBLEMS;
 
   // Platform filter
-  if (platform !== 'all') {
-    if (platform === 'stackoverflow') {
+  if (safePlatform !== 'all') {
+    if (safePlatform === 'stackoverflow') {
       filtered = filtered.filter((p) => p.platform === 'Stack Overflow');
-    } else if (platform === 'leetcode') {
+    } else if (safePlatform === 'leetcode') {
       filtered = filtered.filter((p) => p.platform === 'LeetCode');
-    } else if (platform === 'hackerrank') {
+    } else if (safePlatform === 'hackerrank') {
       filtered = filtered.filter((p) => p.platform === 'HackerRank');
-    } else if (platform === 'datadriven') {
+    } else if (safePlatform === 'datadriven') {
       filtered = filtered.filter((p) => p.platform === 'DataDriven');
-    } else if (platform === 'datalemur') {
+    } else if (safePlatform === 'datalemur') {
       filtered = filtered.filter((p) => p.platform === 'DataLemur');
-    } else if (platform === 'stratascratch') {
+    } else if (safePlatform === 'stratascratch') {
       filtered = filtered.filter((p) => p.platform === 'FAANG+ Mock');
     }
   }
 
   // Difficulty filter
-  if (difficulty !== 'All') {
-    filtered = filtered.filter((p) => p.difficulty.toLowerCase() === difficulty.toLowerCase());
+  if (safeDifficulty !== 'All') {
+    filtered = filtered.filter((p) => p.difficulty.toLowerCase() === safeDifficulty.toLowerCase());
   }
 
-  const requestedLimit = isAll ? filtered.length : Math.max(parseInt(String(limit), 10) || 5, 1);
+  const requestedLimit = isAll ? filtered.length : Math.min(boundedLimit, filtered.length);
 
   // Slice to requested limit
   const results = isAll ? filtered : filtered.slice(0, requestedLimit);
 
-  // Attempt live enrichment from LeetCode, HackerRank, or DataDriven when requested
+  // Attempt live enrichment from LeetCode, HackerRank, or DataDriven when requested (bounded integer)
   let liveSourceNotice = 'Loaded from verified multi-platform live repository';
+  const queryLimit = Math.min(Math.max(requestedLimit, 1), 25);
+
   try {
-    if (platform === 'leetcode') {
+    if (safePlatform === 'leetcode') {
       const lcResponse = await fetch('https://leetcode.com/graphql', {
         method: 'POST',
         headers: {
@@ -465,7 +570,7 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
         },
         body: JSON.stringify({
           query: `query problemsetQuestionList {
-            problemsetQuestionList: questionList(categorySlug: "database", limit: ${requestedLimit}, filters: {}) {
+            problemsetQuestionList: questionList(categorySlug: "database", limit: ${queryLimit}, filters: {}) {
               total: totalNum
               questions: data {
                 frontendQuestionId: questionFrontendId
@@ -485,8 +590,8 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
           liveSourceNotice = `Connected to live LeetCode GraphQL API (${lcData.data.problemsetQuestionList.total} total database questions in registry)`;
         }
       }
-    } else if (platform === 'hackerrank') {
-      const hrResponse = await fetch(`https://www.hackerrank.com/rest/contests/master/tracks/sql/challenges?offset=0&limit=${requestedLimit}`, {
+    } else if (safePlatform === 'hackerrank') {
+      const hrResponse = await fetch(`https://www.hackerrank.com/rest/contests/master/tracks/sql/challenges?offset=0&limit=${encodeURIComponent(String(queryLimit))}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       });
       if (hrResponse.ok) {
@@ -495,7 +600,7 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
           liveSourceNotice = `Connected to live HackerRank SQL Tracks REST API (${hrData.total || 58} domain challenges in catalog)`;
         }
       }
-    } else if (platform === 'datadriven') {
+    } else if (safePlatform === 'datadriven') {
       liveSourceNotice = 'Connected to DataDriven.io Live (928 SQL Interview Questions for Data Engineers in 2026)';
     }
   } catch (err) {
@@ -504,8 +609,8 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
 
   return res.json({
     success: true,
-    platform,
-    difficulty,
+    platform: safePlatform,
+    difficulty: safeDifficulty,
     count: results.length,
     totalAvailable: filtered.length,
     sourceNotice: liveSourceNotice,
@@ -515,10 +620,21 @@ app.post('/api/fetch-platform-questions', async (req, res) => {
 });
 
 // 4. Google Search Grounding for Live Industry SQL Updates & Problems
-app.post('/api/google-search-sql', async (req, res) => {
+app.post('/api/google-search-sql', searchGroundingLimiter, async (req, res) => {
   const { query: userQuery, platform } = req.body || {};
-  const effectiveQuery = userQuery?.trim() || 'latest SQL interview questions and contest problems 2026 LeetCode HackerRank Google Meta';
-  const effectivePlatform = platform || 'All';
+  
+  // Sanitize and bound query input to prevent prompt injection or memory exhaustion
+  const rawQuery = typeof userQuery === 'string' ? userQuery : '';
+  const sanitizedQuery = rawQuery
+    .slice(0, 300)
+    .replace(/[^\w\s\-\.\,\?\:\(\)\'\"]/g, ' ')
+    .trim();
+  const effectiveQuery = sanitizedQuery || 'latest SQL interview questions and contest problems 2026 LeetCode HackerRank Google Meta';
+  
+  const rawPlatform = typeof platform === 'string' ? platform.slice(0, 50).trim() : 'All';
+  const effectivePlatform = ['All', 'LeetCode', 'HackerRank', 'FAANG+ Mock', 'Live Contest / Interview'].includes(rawPlatform)
+    ? rawPlatform
+    : 'All';
   const cacheKey = `${effectiveQuery.toLowerCase()}_${effectivePlatform.toLowerCase()}`;
 
   // 1. Check in-memory query cache for instant response & quota saving

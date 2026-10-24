@@ -29,9 +29,17 @@ import { PlatformFetchModal } from './components/PlatformFetchModal';
 import { QuestionsDirectoryPage } from './components/QuestionsDirectoryPage';
 import { UserProfileMenu } from './components/UserProfileMenu';
 import { ProfileDashboard } from './components/ProfileDashboard';
+import { LandingPage } from './components/LandingPage';
+import { CareerRoadmapsPage } from './components/CareerRoadmapsPage';
+import { DatabaseStudioPage } from './components/DatabaseStudioPage';
+import { GlobalNavbar, AppView } from './components/GlobalNavbar';
+import { AuthPage } from './components/AuthPage';
+import { ApexLogo } from './components/ApexLogo';
 import { SqlCodeEditor } from './components/SqlCodeEditor';
 import { MoreHorizontal } from 'lucide-react';
 import alasql from 'alasql';
+import { validateSafeSqlQuery, capQueryResults } from './utils/sqlSanitizer';
+import { secureRandomUUID } from './utils/cryptoUtils';
 import { livePipeline } from './services/liveQuestionPipeline';
 import { subscribeToLiveProblems } from './firebase';
 import {
@@ -486,11 +494,17 @@ function splitTopLevelColumns(selectStr: string): string[] {
 function runSqlWithAlaSql(
   cleanSql: string,
   problem: SqlProblem
-): { success: boolean; rows: Record<string, any>[]; columns: string[]; error?: string } {
+): { success: boolean; rows: Record<string, any>[]; columns: string[]; error?: string; isTruncated?: boolean } {
+  // Security sandbox check against prohibited administrative/filesystem/network commands
+  const validation = validateSafeSqlQuery(cleanSql, { allowDml: false, maxLen: 10000 });
+  if (!validation.isSafe) {
+    return { success: false, rows: [], columns: [], error: validation.reason || 'Query security check failed.' };
+  }
+
   try {
     const db = new (alasql as any).Database();
 
-    // Register all schema tables
+    // Register all schema tables safely with brackets
     problem.schemas.forEach((schema) => {
       const rawName = schema.tableName;
       const safeName = rawName.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -502,13 +516,13 @@ function runSqlWithAlaSql(
 
       if (safeName !== rawName) {
         try {
-          db.exec(`CREATE TABLE ${safeName}`);
-          db.exec(`INSERT INTO ${safeName} SELECT * FROM ?`, [schema.sampleRows]);
+          db.exec(`CREATE TABLE [${safeName}]`);
+          db.exec(`INSERT INTO [${safeName}] SELECT * FROM ?`, [schema.sampleRows]);
         } catch {}
       }
     });
 
-    let execQuery = cleanSql.replace(/;\s*$/, '').trim();
+    let execQuery = validation.sanitizedSql.replace(/;\s*$/, '').trim();
 
     // Normalize backticks `table_name` to brackets [table_name]
     execQuery = execQuery.replace(/`([^`]+)`/g, '[$1]');
@@ -543,7 +557,9 @@ function runSqlWithAlaSql(
     }
 
     const rawResult = db.exec(execQuery);
-    const rows: Record<string, any>[] = Array.isArray(rawResult) ? rawResult : [];
+    const rawRows: Record<string, any>[] = Array.isArray(rawResult) ? rawResult : [];
+    const capped = capQueryResults(rawRows);
+    const rows = capped.rows;
 
     let columns: string[] = [];
     if (rows.length > 0 && typeof rows[0] === 'object' && rows[0] !== null) {
@@ -552,7 +568,7 @@ function runSqlWithAlaSql(
       columns = extractColumnsFromSql(cleanSql);
     }
 
-    return { success: true, rows, columns };
+    return { success: true, rows, columns, isTruncated: capped.isTruncated };
   } catch (err: any) {
     return { success: false, rows: [], columns: [], error: err?.message || 'SQL Execution Error' };
   }
@@ -563,6 +579,27 @@ function runSqlWithAlaSql(
 // ============================================================================
 function evaluateSqlQuery(sql: string, problem: SqlProblem): ExecutionResult {
   const startTime = performance.now();
+
+  // 1. Sandbox & Security Validation
+  const validation = validateSafeSqlQuery(sql, { allowDml: false, maxLen: 10000 });
+  if (!validation.isSafe) {
+    return {
+      status: 'SYNTAX_ERROR',
+      message: validation.reason || 'Query failed security sandbox check.',
+      executionTimeMs: Math.round(performance.now() - startTime),
+      rowsReturned: 0,
+      outputColumns: [],
+      outputRows: [],
+      checklist: [
+        {
+          id: 'chk_security_sandbox',
+          label: 'Passes SQL security sandbox and prohibited command check',
+          passed: false,
+        },
+      ],
+    };
+  }
+
   const cleanCode = stripSqlComments(sql);
   const normalized = cleanCode.toUpperCase().replace(/\s+/g, ' ').trim();
 
@@ -983,7 +1020,7 @@ export default function App() {
   const [groundedSearchResult, setGroundedSearchResult] = useState<GoogleSearchGroundedPayload | null>(null);
   const [isGoogleSearchPanelOpen, setIsGoogleSearchPanelOpen] = useState<boolean>(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState<boolean>(false);
-  const [currentView, setCurrentView] = useState<'sandbox' | 'directory' | 'profile'>(() => {
+  const [currentView, setCurrentView] = useState<AppView>(() => {
     if (typeof window !== 'undefined') {
       const h = window.location.hash;
       if (h === '#/questions' || h === '#/directory' || h === '#question-library') {
@@ -992,25 +1029,97 @@ export default function App() {
       if (h === '#/profile' || h === '#/analytics' || h === '#/dashboard') {
         return 'profile';
       }
+      if (h === '#/roadmaps' || h === '#/tracks' || h === '#/career') {
+        return 'roadmaps';
+      }
+      if (h === '#/studio' || h === '#/schema' || h === '#/er') {
+        return 'studio';
+      }
+      if (h === '#/sandbox' || h === '#/ide' || h === '#/playground') {
+        return 'sandbox';
+      }
+      if (h === '#/landing' || h === '#/' || h === '') {
+        return 'landing';
+      }
     }
-    return 'sandbox';
+    return 'landing';
   });
   const [submissionVerdict, setSubmissionVerdict] = useState<SubmissionVerdict | null>(null);
 
+  // ==========================================================================
+  // REAL-TIME ACCESS REVOCATION & ROUTE GUARD
+  // ==========================================================================
+  // If user signs out, IMMEDIATELY revoke dashboard access in real time and clear session
+  useEffect(() => {
+    if (!currentUser) {
+      const isProtectedRoute =
+        currentView === 'sandbox' ||
+        currentView === 'directory' ||
+        currentView === 'roadmaps' ||
+        currentView === 'studio' ||
+        currentView === 'profile';
+
+      if (isProtectedRoute) {
+        setCurrentView('landing');
+        window.location.hash = '#/';
+        setSubmissionVerdict(null);
+        setExecutionResult(null);
+        safeStorage.removeItem('apex_last_execution_result');
+        safeStorage.removeItem('apex_last_execution_problem_id');
+      }
+    }
+  }, [currentUser, currentView]);
+
+  // When user logs in, automatically redirect over to the next page (Sandbox IDE)
+  useEffect(() => {
+    if (currentUser && (currentView === 'landing' || currentView === 'auth')) {
+      setCurrentView('sandbox');
+      window.location.hash = '#/sandbox';
+    }
+  }, [currentUser, currentView]);
+
+  // Hash-based route protection: guards against typing #/sandbox or #/questions directly into the URL bar when logged out
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
+      const isAuthRoute = hash === '#/auth' || hash === '#/signin' || hash === '#/signup' || hash === '#/login';
+      const isHomeRoute = hash === '#/landing' || hash === '#/' || hash === '';
+
+      if (isAuthRoute) {
+        setCurrentView('auth');
+        return;
+      }
+
+      if (isHomeRoute) {
+        setCurrentView('landing');
+        return;
+      }
+
+      // If user is not authenticated, IMMEDIATELY revoke access to dashboard/app routes!
+      if (!currentUser) {
+        setCurrentView('landing');
+        window.location.hash = '#/';
+        openAuthModal('signin');
+        return;
+      }
+
+      // Authenticated route navigation
       if (hash === '#/questions' || hash === '#/directory' || hash === '#question-library') {
         setCurrentView('directory');
       } else if (hash === '#/profile' || hash === '#/analytics' || hash === '#/dashboard') {
         setCurrentView('profile');
-      } else if (hash === '#/sandbox') {
+      } else if (hash === '#/roadmaps' || hash === '#/tracks' || hash === '#/career') {
+        setCurrentView('roadmaps');
+      } else if (hash === '#/studio' || hash === '#/schema' || hash === '#/er') {
+        setCurrentView('studio');
+      } else if (hash === '#/sandbox' || hash === '#/ide' || hash === '#/playground') {
         setCurrentView('sandbox');
       }
     };
+
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
-  }, []);
+  }, [currentUser, openAuthModal]);
 
   const handleSelectDirectoryProblem = useCallback(
     (prob: SqlProblem) => {
@@ -1781,7 +1890,7 @@ export default function App() {
       // Record real-time submission in safeStorage for LeetCode Profile & Analytics
       try {
         const subRecord = {
-          id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          id: `sub_${Date.now()}_${secureRandomUUID().slice(0, 8)}`,
           problemId: problem.id,
           problemTitle: problem.title,
           platform: problem.platform || 'LeetCode',
@@ -1928,84 +2037,262 @@ export default function App() {
     return Array.from({ length: Math.max(count, 14) }, (_, i) => i + 1);
   }, [sqlCode]);
 
+  if (currentView === 'auth') {
+    return (
+      <AuthPage
+        initialMode={typeof window !== 'undefined' && window.location.hash.includes('signup') ? 'signup' : 'signin'}
+        onBack={() => {
+          setCurrentView('landing');
+          window.location.hash = '#/';
+        }}
+        onAuthSuccess={() => {
+          setCurrentView('sandbox');
+          window.location.hash = '#/sandbox';
+        }}
+      />
+    );
+  }
+
+  // HARD RENDER-LEVEL ACCESS REVOCATION GUARD:
+  // If currentUser is null, NO protected dashboard component can EVER be rendered!
+  if (!currentUser && (currentView === 'sandbox' || currentView === 'directory' || currentView === 'roadmaps' || currentView === 'studio' || currentView === 'profile')) {
+    return (
+      <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
+        <GlobalNavbar
+          currentView="landing"
+          onNavigate={(v) => {
+            if (!currentUser && v !== 'landing' && v !== 'auth') {
+              openAuthModal('signin');
+            } else {
+              setCurrentView(v);
+              window.location.hash = v === 'landing' ? '#/' : `#/${v}`;
+            }
+          }}
+          solvedCount={0}
+          masteredCount={0}
+          onSyncAll={handleCloudSyncAll}
+          onLogout={() => {
+            setCurrentView('landing');
+            window.location.hash = '#/';
+          }}
+        />
+        <LandingPage
+          onStartPracticing={() => openAuthModal('signin')}
+          onExploreQuestions={() => openAuthModal('signin')}
+          onOpenRoadmaps={() => openAuthModal('signin')}
+          onOpenStudio={() => openAuthModal('signin')}
+          onOpenProfile={() => openAuthModal('signin')}
+          solvedCount={0}
+        />
+        <AuthModal />
+      </div>
+    );
+  }
+
+  if (currentView === 'landing') {
+    return (
+      <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
+        <GlobalNavbar
+          currentView={currentView}
+          onNavigate={(v) => {
+            setCurrentView(v);
+            window.location.hash = v === 'landing' ? '#/' : `#/${v}`;
+          }}
+          solvedCount={Object.keys(solvedMap).length}
+          masteredCount={masteredList.length}
+          onSyncAll={handleCloudSyncAll}
+          onLogout={() => {
+            setCurrentView('landing');
+            window.location.hash = '#/';
+          }}
+        />
+        <LandingPage
+          onStartPracticing={() => {
+            if (!currentUser) {
+              openAuthModal('signin');
+            } else {
+              setCurrentView('sandbox');
+              window.location.hash = '#/sandbox';
+            }
+          }}
+          onExploreQuestions={() => {
+            if (!currentUser) {
+              openAuthModal('signin');
+            } else {
+              setCurrentView('directory');
+              window.location.hash = '#/questions';
+            }
+          }}
+          onOpenRoadmaps={() => {
+            if (!currentUser) {
+              openAuthModal('signin');
+            } else {
+              setCurrentView('roadmaps');
+              window.location.hash = '#/roadmaps';
+            }
+          }}
+          onOpenStudio={() => {
+            if (!currentUser) {
+              openAuthModal('signin');
+            } else {
+              setCurrentView('studio');
+              window.location.hash = '#/studio';
+            }
+          }}
+          onOpenProfile={() => {
+            if (!currentUser) {
+              openAuthModal('signin');
+            } else {
+              setCurrentView('profile');
+              window.location.hash = '#/profile';
+            }
+          }}
+          solvedCount={Object.keys(solvedMap).length}
+        />
+        <AuthModal />
+        <PlatformFetchModal
+          isOpen={isPlatformModalOpen}
+          onClose={() => setIsPlatformModalOpen(false)}
+          onSelectProblem={(prob) => {
+            setActiveMode('live_stream');
+            setSelectedLiveProblemId(prob.id);
+            setQuestionNumber(1);
+            setJumpInput('1');
+            setIsPlatformModalOpen(false);
+            setCurrentView('sandbox');
+          }}
+          onToast={(msg) => {
+            setInsertToast(msg);
+            setTimeout(() => setInsertToast(null), 3500);
+          }}
+          onOpenDirectory={() => {
+            setIsPlatformModalOpen(false);
+            setCurrentView('directory');
+            window.location.hash = '#/questions';
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (currentView === 'roadmaps') {
+    return (
+      <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
+        <GlobalNavbar
+          currentView={currentView}
+          onNavigate={(v) => {
+            setCurrentView(v);
+            window.location.hash = v === 'landing' ? '#/' : `#/${v}`;
+          }}
+          solvedCount={Object.keys(solvedMap).length}
+          masteredCount={masteredList.length}
+          onSyncAll={handleCloudSyncAll}
+          onLogout={() => {
+            setCurrentView('landing');
+            window.location.hash = '#/';
+          }}
+        />
+        <CareerRoadmapsPage
+          onSelectProblem={handleSelectDirectoryProblem}
+          onBackToSandbox={() => {
+            setCurrentView('sandbox');
+            window.location.hash = '#/sandbox';
+          }}
+          solvedMap={solvedMap}
+        />
+        <AuthModal />
+        <PlatformFetchModal
+          isOpen={isPlatformModalOpen}
+          onClose={() => setIsPlatformModalOpen(false)}
+          onSelectProblem={(prob) => {
+            setActiveMode('live_stream');
+            setSelectedLiveProblemId(prob.id);
+            setQuestionNumber(1);
+            setJumpInput('1');
+            setIsPlatformModalOpen(false);
+            setCurrentView('sandbox');
+          }}
+          onToast={(msg) => {
+            setInsertToast(msg);
+            setTimeout(() => setInsertToast(null), 3500);
+          }}
+          onOpenDirectory={() => {
+            setIsPlatformModalOpen(false);
+            setCurrentView('directory');
+            window.location.hash = '#/questions';
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (currentView === 'studio') {
+    return (
+      <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
+        <GlobalNavbar
+          currentView={currentView}
+          onNavigate={(v) => {
+            setCurrentView(v);
+            window.location.hash = v === 'landing' ? '#/' : `#/${v}`;
+          }}
+          solvedCount={Object.keys(solvedMap).length}
+          masteredCount={masteredList.length}
+          onSyncAll={handleCloudSyncAll}
+          onLogout={() => {
+            setCurrentView('landing');
+            window.location.hash = '#/';
+          }}
+        />
+        <DatabaseStudioPage
+          currentSchemas={problem?.schemas}
+          onBackToSandbox={() => {
+            setCurrentView('sandbox');
+            window.location.hash = '#/sandbox';
+          }}
+        />
+        <AuthModal />
+        <PlatformFetchModal
+          isOpen={isPlatformModalOpen}
+          onClose={() => setIsPlatformModalOpen(false)}
+          onSelectProblem={(prob) => {
+            setActiveMode('live_stream');
+            setSelectedLiveProblemId(prob.id);
+            setQuestionNumber(1);
+            setJumpInput('1');
+            setIsPlatformModalOpen(false);
+            setCurrentView('sandbox');
+          }}
+          onToast={(msg) => {
+            setInsertToast(msg);
+            setTimeout(() => setInsertToast(null), 3500);
+          }}
+          onOpenDirectory={() => {
+            setIsPlatformModalOpen(false);
+            setCurrentView('directory');
+            window.location.hash = '#/questions';
+          }}
+        />
+      </div>
+    );
+  }
+
   if (currentView === 'directory') {
     return (
-      <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans">
-        {/* Persistent top header - Apple Music frosted design */}
-        <header className="flex items-center justify-between px-3 sm:px-4 lg:px-6 h-14 bg-[#080d1a]/90 backdrop-blur-2xl border-b border-white/[0.08] shrink-0 z-30 select-none sticky top-0 gap-2">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 mr-0.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-cyan-500 to-teal-400 p-0.5 shadow-md shadow-cyan-500/15">
-                <div className="w-full h-full bg-[#0b1120] rounded-[10px] flex items-center justify-center font-black text-xs text-white tracking-wider">
-                  SQL
-                </div>
-              </div>
-              <span className="font-extrabold text-sm tracking-tight text-white hidden sm:inline">ApexSQL</span>
-            </div>
-
-            <nav className="relative flex items-center p-1 apple-pill-bar shrink-0">
-              {[
-                { id: 'sandbox', label: 'Sandbox', icon: '⚡' },
-                { id: 'directory', label: 'Questions', icon: '📚', count: '11,162' },
-                { id: 'profile', label: 'Profile', icon: '📊' },
-              ].map((tab) => {
-                const isActive = currentView === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => {
-                      setCurrentView(tab.id as any);
-                      window.location.hash = tab.id === 'directory' ? '#/questions' : `#/${tab.id}`;
-                    }}
-                    className={`relative z-10 h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-colors duration-150 flex items-center gap-1.5 cursor-pointer whitespace-nowrap select-none ${
-                      isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
-                    {tab.count && (
-                      <span className={`hidden sm:inline-block px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums transition-colors ${
-                        isActive ? 'bg-cyan-400/30 text-cyan-200' : 'bg-white/10 text-slate-400'
-                      }`}>
-                        {tab.count}
-                      </span>
-                    )}
-                    {isActive && (
-                      <motion.div
-                        layoutId="activeNavPill"
-                        className="absolute inset-0 rounded-full apple-pill-active -z-10"
-                        transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 pr-1">
-            <button
-              onClick={() => {
-                setCurrentView('sandbox');
-                window.location.hash = '#/sandbox';
-              }}
-              className="h-8.5 px-3 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-500/20 cursor-pointer shrink-0"
-            >
-              <span>⚡</span>
-              <span className="hidden sm:inline">Open SQL Sandbox</span>
-            </button>
-            <UserProfileMenu
-              solvedCount={Object.keys(solvedMap).length}
-              masteredCount={masteredList.length}
-              onSyncAll={handleCloudSyncAll}
-              onOpenProfile={() => {
-                setCurrentView('profile');
-                window.location.hash = '#/profile';
-              }}
-            />
-          </div>
-        </header>
-
+      <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
+        <GlobalNavbar
+          currentView={currentView}
+          onNavigate={(v) => {
+            setCurrentView(v);
+            window.location.hash = v === 'landing' ? '#/' : `#/${v}`;
+          }}
+          solvedCount={Object.keys(solvedMap).length}
+          masteredCount={masteredList.length}
+          onSyncAll={handleCloudSyncAll}
+          onLogout={() => {
+            setCurrentView('landing');
+            window.location.hash = '#/';
+          }}
+        />
         <QuestionsDirectoryPage
           onSelectProblem={handleSelectDirectoryProblem}
           onBackToSandbox={() => {
@@ -2014,34 +2301,87 @@ export default function App() {
           }}
           solvedMap={solvedMap}
         />
-
-        {insertToast && (
-          <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-2xl flex items-center gap-2">
-            <span>✓</span>
-            <span>{insertToast}</span>
-          </div>
-        )}
+        <AuthModal />
+        <PlatformFetchModal
+          isOpen={isPlatformModalOpen}
+          onClose={() => setIsPlatformModalOpen(false)}
+          onSelectProblem={(prob) => {
+            setActiveMode('live_stream');
+            setSelectedLiveProblemId(prob.id);
+            setQuestionNumber(1);
+            setJumpInput('1');
+            setIsPlatformModalOpen(false);
+            setCurrentView('sandbox');
+          }}
+          onToast={(msg) => {
+            setInsertToast(msg);
+            setTimeout(() => setInsertToast(null), 3500);
+          }}
+          onOpenDirectory={() => {
+            setIsPlatformModalOpen(false);
+            setCurrentView('directory');
+            window.location.hash = '#/questions';
+          }}
+        />
       </div>
     );
   }
 
   if (currentView === 'profile') {
     return (
-      <ProfileDashboard
-        solvedMap={solvedMap}
-        masteredList={masteredList}
-        reviewList={reviewList}
-        onSelectProblem={handleSelectDirectoryProblem}
-        onBackToSandbox={() => {
-          setCurrentView('sandbox');
-          window.location.hash = '#/sandbox';
-        }}
-        onOpenDirectory={() => {
-          setCurrentView('directory');
-          window.location.hash = '#/questions';
-        }}
-        onSyncAll={handleCloudSyncAll}
-      />
+      <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
+        <GlobalNavbar
+          currentView={currentView}
+          onNavigate={(v) => {
+            setCurrentView(v);
+            window.location.hash = v === 'landing' ? '#/' : `#/${v}`;
+          }}
+          solvedCount={Object.keys(solvedMap).length}
+          masteredCount={masteredList.length}
+          onSyncAll={handleCloudSyncAll}
+          onLogout={() => {
+            setCurrentView('landing');
+            window.location.hash = '#/';
+          }}
+        />
+        <ProfileDashboard
+          solvedMap={solvedMap}
+          masteredList={masteredList}
+          reviewList={reviewList}
+          onSelectProblem={handleSelectDirectoryProblem}
+          onBackToSandbox={() => {
+            setCurrentView('sandbox');
+            window.location.hash = '#/sandbox';
+          }}
+          onOpenDirectory={() => {
+            setCurrentView('directory');
+            window.location.hash = '#/questions';
+          }}
+          onSyncAll={handleCloudSyncAll}
+        />
+        <AuthModal />
+        <PlatformFetchModal
+          isOpen={isPlatformModalOpen}
+          onClose={() => setIsPlatformModalOpen(false)}
+          onSelectProblem={(prob) => {
+            setActiveMode('live_stream');
+            setSelectedLiveProblemId(prob.id);
+            setQuestionNumber(1);
+            setJumpInput('1');
+            setIsPlatformModalOpen(false);
+            setCurrentView('sandbox');
+          }}
+          onToast={(msg) => {
+            setInsertToast(msg);
+            setTimeout(() => setInsertToast(null), 3500);
+          }}
+          onOpenDirectory={() => {
+            setIsPlatformModalOpen(false);
+            setCurrentView('directory');
+            window.location.hash = '#/questions';
+          }}
+        />
+      </div>
     );
   }
 
@@ -2053,20 +2393,23 @@ export default function App() {
       <header className="hidden md:flex items-center justify-between px-2 sm:px-3 lg:px-4 h-13.5 bg-[#080d1a]/85 backdrop-blur-2xl border-b border-white/[0.08] shrink-0 z-40 select-none gap-2 w-full max-w-full shadow-sm">
         {/* Left: Brand + View Switcher + Challenge Mode */}
         <div className="flex items-center gap-1.5 lg:gap-2.5 shrink-0 min-w-0">
-          <div className="flex items-center gap-1.5 mr-0.5 shrink-0">
-            <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-cyan-400 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-500/25">
-              SQL
-            </span>
-            <span className="font-black text-sm tracking-tight text-white hidden lg:inline bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
-              ApexSQL
-            </span>
-          </div>
+          <ApexLogo
+            size="sm"
+            showBadge={false}
+            onClick={() => {
+              setCurrentView('landing');
+              window.location.hash = '#/';
+            }}
+          />
 
-          {/* Apple Segmented Pill Navigation */}
+          {/* Apple Segmented Pill Navigation (Global Multi-Page) */}
           <nav className="relative flex items-center p-1 apple-pill-bar shrink-0">
             {[
+              { id: 'landing', label: 'Home', icon: '🌐' },
               { id: 'sandbox', label: 'Sandbox', icon: '⚡' },
               { id: 'directory', label: 'Questions', icon: '📚', count: '11,162' },
+              { id: 'roadmaps', label: 'Roadmaps', icon: '🗺️' },
+              { id: 'studio', label: 'DB Studio', icon: '🗄️' },
               { id: 'profile', label: 'Profile', icon: '📊' },
             ].map((tab) => {
               const isActive = (currentView as string) === tab.id;
@@ -2075,7 +2418,7 @@ export default function App() {
                   key={tab.id}
                   onClick={() => {
                     setCurrentView(tab.id as any);
-                    window.location.hash = tab.id === 'directory' ? '#/questions' : `#/${tab.id}`;
+                    window.location.hash = tab.id === 'landing' ? '#/' : `#/${tab.id}`;
                   }}
                   className={`relative z-10 h-7 px-2.5 sm:px-3 rounded-full text-xs font-bold transition-colors duration-150 flex items-center gap-1.5 cursor-pointer whitespace-nowrap select-none ${
                     isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
@@ -2084,7 +2427,7 @@ export default function App() {
                   <span>{tab.icon}</span>
                   <span>{tab.label}</span>
                   {tab.count && (
-                    <span className={`hidden xl:inline-block px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums transition-colors ${
+                    <span className={`hidden 2xl:inline-block px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums transition-colors ${
                       isActive ? 'bg-cyan-400/30 text-cyan-200' : 'bg-white/10 text-slate-400'
                     }`}>
                       {tab.count}
@@ -2347,6 +2690,10 @@ export default function App() {
                 setCurrentView('profile');
                 window.location.hash = '#/profile';
               }}
+              onLogout={() => {
+                setCurrentView('landing');
+                window.location.hash = '#/';
+              }}
             />
           </div>
         </div>
@@ -2428,6 +2775,10 @@ export default function App() {
                 solvedCount={Object.keys(solvedMap).length}
                 masteredCount={masteredList.length}
                 onSyncAll={handleCloudSyncAll}
+          onLogout={() => {
+            setCurrentView('landing');
+            window.location.hash = '#/';
+          }}
                 onOpenProfile={() => {
                   setCurrentView('profile');
                   window.location.hash = '#/profile';

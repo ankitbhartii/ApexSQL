@@ -24,6 +24,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 interface UserProfileMenuProps {
+  onLogout?: () => void;
   solvedCount: number;
   masteredCount: number;
   onSyncAll: () => Promise<void>;
@@ -34,7 +35,8 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
   solvedCount,
   masteredCount,
   onSyncAll,
-  onOpenProfile
+  onOpenProfile,
+  onLogout
 }) => {
   const {
     currentUser,
@@ -71,25 +73,32 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
 
   if (!currentUser) {
     return (
-      <div className="flex items-center gap-1.5 shrink-0" ref={menuRef}>
+      <div className="flex items-center gap-2 shrink-0" ref={menuRef}>
         <motion.button
-          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
           onClick={() => openAuthModal('signin')}
-          className="h-8.5 px-3 rounded-full text-xs font-semibold text-slate-200 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-cyan-400/40 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
+          className="h-8.5 px-3.5 rounded-full text-xs font-semibold text-slate-200 hover:text-white apple-glass hover:border-cyan-400/50 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm group select-none"
           title="Sign in to sync your SQL progress"
         >
-          <LogIn className="w-3.5 h-3.5 text-cyan-400" />
+          <LogIn className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-x-0.5 transition-transform" />
           <span>Sign In</span>
         </motion.button>
 
         <motion.button
-          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
           onClick={() => openAuthModal('signup')}
-          className="relative group overflow-hidden h-8.5 px-3 rounded-full text-xs font-bold text-white bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 hover:from-indigo-400 hover:to-cyan-400 shadow-sm border border-indigo-400/30 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap hidden sm:inline-flex"
+          className="shimmer-btn-border h-8.5 cursor-pointer select-none shadow-md shadow-indigo-500/25"
           title="Create a free candidate cloud profile"
         >
-          <Sparkles className="w-3.5 h-3.5 text-cyan-200" />
-          <span>Sign Up</span>
+          <div className="shimmer-btn-inner h-full px-3.5 flex items-center gap-1.5 text-xs font-bold text-white group">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-300 animate-pulse" />
+            <span className="bg-gradient-to-r from-white via-cyan-100 to-indigo-200 bg-clip-text text-transparent">
+              Sign Up
+            </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping ml-0.5" />
+          </div>
         </motion.button>
       </div>
     );
@@ -280,6 +289,10 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
               onClick={async () => {
                 setIsOpen(false);
                 await logout();
+                window.location.hash = '#/';
+                if (onLogout) {
+                  onLogout();
+                }
               }}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition cursor-pointer"
             >
