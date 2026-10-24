@@ -12,6 +12,7 @@ import {
   ALL_DATADRIVEN_PROBLEMS,
   ALL_LEETCODE_PROBLEMS,
   ALL_HACKERRANK_PROBLEMS,
+  ALL_DATALEMUR_PROBLEMS,
   SUPPORTED_PLATFORMS,
 } from '../services/platformQuestionsData';
 
@@ -21,7 +22,7 @@ interface QuestionsDirectoryPageProps {
   solvedMap: Record<string, any>;
 }
 
-type PlatformFilter = 'all' | 'stackoverflow' | 'datadriven' | 'leetcode' | 'hackerrank' | 'stratascratch';
+type PlatformFilter = 'all' | 'stackoverflow' | 'datadriven' | 'leetcode' | 'hackerrank' | 'datalemur' | 'stratascratch';
 
 export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
   onSelectProblem,
@@ -48,6 +49,8 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
         return ALL_LEETCODE_PROBLEMS;
       case 'hackerrank':
         return ALL_HACKERRANK_PROBLEMS;
+      case 'datalemur':
+        return ALL_DATALEMUR_PROBLEMS;
       case 'stratascratch':
         return AUTHENTIC_PLATFORM_PROBLEMS.filter((p) => p.platform === 'FAANG+ Mock');
       case 'all':
@@ -198,7 +201,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
       {/* Main Container */}
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 flex flex-col space-y-5">
         {/* Platform Selection Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
           <motion.button
             whileHover={{ y: -2, scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
@@ -212,7 +215,7 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             <div className="flex items-center justify-between mb-1">
               <span className="text-xl">🌐</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                11,309 Qs
+                11,330 Qs
               </span>
             </div>
             <div>
@@ -306,6 +309,28 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
             <div>
               <div className="text-xs font-bold text-white">HackerRank</div>
               <div className="text-[10px] text-slate-400">SQL Domain Track</div>
+            </div>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ y: -2, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handlePlatformChange('datalemur')}
+            className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+              selectedPlatform === 'datalemur'
+                ? 'bg-amber-600/20 border-amber-500 text-white shadow-lg ring-1 ring-amber-500'
+                : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-850 hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xl">🐒</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                21 Qs
+              </span>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-white">DataLemur</div>
+              <div className="text-[10px] text-slate-400">FAANG & Tech Interviews</div>
             </div>
           </motion.button>
 
@@ -601,6 +626,12 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
                         text: 'HackerRank',
                         bg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
                         icon: '🟢',
+                      };
+                    } else if (q.platform === 'DataLemur') {
+                      platformBadge = {
+                        text: 'DataLemur',
+                        bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                        icon: '🐒',
                       };
                     } else if (q.platform === 'Stack Overflow') {
                       platformBadge = {

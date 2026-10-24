@@ -73,7 +73,7 @@ export function getCleanStarterCode(_problem?: SqlProblem | null, dialect: Diale
 
 
 export interface PlatformInfo {
-  id: 'leetcode' | 'hackerrank' | 'datadriven' | 'stackoverflow' | 'stratascratch' | 'all';
+  id: 'leetcode' | 'hackerrank' | 'datadriven' | 'stackoverflow' | 'stratascratch' | 'datalemur' | 'all';
   name: string;
   tagline: string;
   icon: string;
@@ -98,9 +98,23 @@ export const SUPPORTED_PLATFORMS: PlatformInfo[] = [
     borderColor: 'border-indigo-500/30',
     badgeColor: 'bg-indigo-500/20 text-indigo-300',
     apiEndpoint: '/api/fetch-platform-questions?platform=all',
-    description: 'Unified stream aggregating Stack Overflow Interview Archive (10,000 Qs), DataDriven.io (928 Qs), LeetCode Database (323 Qs), HackerRank SQL Track (58 Qs), and FAANG case challenges.',
-    totalAvailable: 11309,
+    description: 'Unified stream aggregating Stack Overflow Interview Archive (10,000 Qs), DataDriven.io (928 Qs), LeetCode Database (323 Qs), HackerRank SQL Track (58 Qs), DataLemur (21 Qs), and FAANG case challenges.',
+    totalAvailable: 11330,
     companies: ['Google', 'Meta', 'Amazon', 'Apple', 'Uber', 'Netflix', 'Stripe', 'Goldman Sachs'],
+  },
+  {
+    id: 'datalemur',
+    name: 'DataLemur',
+    tagline: 'Authentic FAANG & Tech SQL Interview Questions',
+    icon: '🐒',
+    color: 'text-amber-500',
+    bgLight: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/30',
+    badgeColor: 'bg-amber-500/20 text-amber-300',
+    apiEndpoint: 'https://datalemur.com/questions',
+    description: 'Curated real-world SQL interview problems asked by Meta, Amazon, Google, LinkedIn, Uber, Tesla, Twitter/X, TikTok, and Stripe by Nick Singh.',
+    totalAvailable: 21,
+    companies: ['Meta', 'Amazon', 'Google', 'LinkedIn', 'Tesla', 'Twitter', 'TikTok', 'Uber', 'Stripe', 'CVS Health', 'Walmart', 'Wayfair', 'JPMorgan Chase'],
   },
   {
     id: 'stackoverflow',
@@ -18980,18 +18994,20 @@ const RAW_LEETCODE_PROBLEMS: SqlProblem[] = [
 
 import { ALL_DATADRIVEN_PROBLEMS } from './datadrivenQuestionsData';
 import { ALL_STACKOVERFLOW_PROBLEMS } from './stackoverflowQuestionsData';
-export { ALL_DATADRIVEN_PROBLEMS, ALL_STACKOVERFLOW_PROBLEMS };
+import { ALL_DATALEMUR_PROBLEMS } from './datalemurQuestionsData';
+export { ALL_DATADRIVEN_PROBLEMS, ALL_STACKOVERFLOW_PROBLEMS, ALL_DATALEMUR_PROBLEMS };
 
 export const ALL_LEETCODE_PROBLEMS: SqlProblem[] = RAW_LEETCODE_PROBLEMS.map((prob) => ({
   ...prob,
   starterCodeByDialect: buildCleanStarterCode(prob.schemas),
 }));
 
-// Master Consolidated Multi-Platform Catalog (11,309 Total: 10,000 Stack Overflow + 58 HackerRank + 323 LeetCode + 928 DataDriven.io)
+// Master Consolidated Multi-Platform Catalog (11,330 Total: 10,000 Stack Overflow + 58 HackerRank + 323 LeetCode + 928 DataDriven.io + 21 DataLemur)
 export const AUTHENTIC_PLATFORM_PROBLEMS: SqlProblem[] = [
   ...ALL_STACKOVERFLOW_PROBLEMS,
   ...ALL_HACKERRANK_PROBLEMS,
   ...ALL_LEETCODE_PROBLEMS,
   ...ALL_DATADRIVEN_PROBLEMS,
+  ...ALL_DATALEMUR_PROBLEMS,
 ];
 
