@@ -168,6 +168,8 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
 }) => {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const formattingDisposableRef = useRef<{ dispose(): void } | null>(null);
+  const completionDisposableRef = useRef<{ dispose(): void } | null>(null);
   const onRunRef = useRef(onRun);
   const onSubmitRef = useRef(onSubmit);
   const schemasRef = useRef(schemas);
@@ -176,7 +178,21 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
     onRunRef.current = onRun;
     onSubmitRef.current = onSubmit;
     schemasRef.current = schemas;
-  });
+  }, [onRun, onSubmit, schemas]);
+
+  // Clean up Monaco language providers on component unmount
+  useEffect(() => {
+    return () => {
+      if (formattingDisposableRef.current) {
+        formattingDisposableRef.current.dispose();
+        formattingDisposableRef.current = null;
+      }
+      if (completionDisposableRef.current) {
+        completionDisposableRef.current.dispose();
+        completionDisposableRef.current = null;
+      }
+    };
+  }, []);
 
   const [cursorPos, setCursorPos] = useState<{ line: number; col: number }>({ line: 1, col: 1 });
   const [copied, setCopied] = useState(false);
@@ -268,8 +284,12 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
       setCursorPos({ line: e.position.lineNumber, col: e.position.column });
     });
 
+    // Dispose previous providers if any existed to avoid duplicate handlers
+    if (formattingDisposableRef.current) formattingDisposableRef.current.dispose();
+    if (completionDisposableRef.current) completionDisposableRef.current.dispose();
+
     // Register Document Formatting Provider (Shift+Alt+F)
-    monaco.languages.registerDocumentFormattingEditProvider('sql', {
+    formattingDisposableRef.current = monaco.languages.registerDocumentFormattingEditProvider('sql', {
       provideDocumentFormattingEdits: (model: any) => {
         const formatted = formatSqlQuery(model.getValue());
         return [
@@ -282,7 +302,7 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
     });
 
     // Register Custom SQL IntelliSense Autocomplete
-    monaco.languages.registerCompletionItemProvider('sql', {
+    completionDisposableRef.current = monaco.languages.registerCompletionItemProvider('sql', {
       triggerCharacters: [' ', '.', '(', ','],
       provideCompletionItems: (model: any, position: any) => {
         const word = model.getWordUntilPosition(position);
@@ -376,6 +396,18 @@ export const SqlCodeEditor: React.FC<SqlCodeEditorProps> = ({
 
         return { suggestions };
       },
+    });
+
+    // Clean up providers when this editor instance is disposed
+    editor.onDidDispose(() => {
+      if (formattingDisposableRef.current) {
+        formattingDisposableRef.current.dispose();
+        formattingDisposableRef.current = null;
+      }
+      if (completionDisposableRef.current) {
+        completionDisposableRef.current.dispose();
+        completionDisposableRef.current = null;
+      }
     });
 
     // Run initial syntax validation

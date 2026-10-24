@@ -42,6 +42,11 @@ export const QuestionsDirectoryPage: React.FC<QuestionsDirectoryPageProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
 
+  // Reset pagination to page 1 whenever search query or filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, difficultyFilter, selectedTopic, selectedCompany, statusFilter, leetcodeSubFilter]);
+
   // Base list depending on selected platform tab
   const baseQuestions = useMemo(() => {
     switch (selectedPlatform) {
