@@ -30,6 +30,7 @@ interface CareerRoadmapsPageProps {
   onSelectProblem: (problem: SqlProblem) => void;
   onBackToSandbox: () => void;
   solvedMap: Record<string, any>;
+  onOpenMockInterview?: () => void;
 }
 
 type TrackId = 'data_analyst' | 'data_engineer' | 'backend_dev' | 'leetcode_top50';
@@ -48,7 +49,8 @@ interface Milestone {
 export const CareerRoadmapsPage: React.FC<CareerRoadmapsPageProps> = ({
   onSelectProblem,
   onBackToSandbox,
-  solvedMap
+  solvedMap,
+  onOpenMockInterview
 }) => {
   const [activeTrack, setActiveTrack] = useState<TrackId>('data_analyst');
 
@@ -330,6 +332,15 @@ export const CareerRoadmapsPage: React.FC<CareerRoadmapsPageProps> = ({
             </div>
           </div>
 
+          {onOpenMockInterview && (
+            <button
+              onClick={onOpenMockInterview}
+              className="px-3.5 py-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-amber-500/30 active:scale-95 shadow-xs"
+            >
+              <span>⏱️</span>
+              <span>Simulate FAANG Screen (45m)</span>
+            </button>
+          )}
           <div className="flex items-center gap-3">
             <span className="text-xs text-slate-400 font-mono">
               Track Progress: <strong className="text-emerald-400 font-bold">{completedCount} / {currentTrackData.milestones.length}</strong> ({progressPercent}%)
