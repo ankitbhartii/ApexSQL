@@ -10,7 +10,7 @@ import { ApexLogo } from './ApexLogo';
 import { UserProfileMenu } from './UserProfileMenu';
 import { useAuth } from '../context/AuthContext';
 
-export type AppView = 'landing' | 'sandbox' | 'directory' | 'roadmaps' | 'studio' | 'profile' | 'auth';
+export type AppView = 'landing' | 'sandbox' | 'directory' | 'roadmaps' | 'studio' | 'profile' | 'mock-interview' | 'auth';
 
 interface GlobalNavbarProps {
   onLogout?: () => void;
@@ -40,6 +40,7 @@ export const GlobalNavbar: React.FC<GlobalNavbarProps> = ({
   const appTabs: { id: AppView; label: string; icon: string; count?: string }[] = [
     { id: 'sandbox', label: 'Sandbox', icon: '⚡' },
     { id: 'directory', label: 'Questions', icon: '📚', count: '11,162' },
+    { id: 'mock-interview', label: 'FAANG Mock', icon: '⏱️', count: '45m' },
     { id: 'roadmaps', label: 'Roadmaps', icon: '🗺️' },
     { id: 'studio', label: 'DB Studio', icon: '🗄️' },
     { id: 'profile', label: 'Profile', icon: '📊' },

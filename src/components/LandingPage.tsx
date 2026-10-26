@@ -38,6 +38,7 @@ interface LandingPageProps {
   onOpenStudio: () => void;
   onOpenProfile: () => void;
   solvedCount: number;
+  onOpenMockInterview?: () => void;
 }
 
 const DEMO_SNIPPETS: Record<Dialect, string> = {
@@ -111,6 +112,7 @@ ORDER BY depth, emp_id;`
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onStartPracticing,
+  onOpenMockInterview,
   onExploreQuestions,
   onOpenRoadmaps,
   onOpenStudio,
@@ -268,6 +270,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <TrendingUp className="w-4 h-4 text-emerald-400" />
               <span>Career Paths</span>
             </motion.button>
+            {onOpenMockInterview && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={onOpenMockInterview}
+                className="apple-btn-secondary h-12 px-6 rounded-full text-sm font-semibold flex items-center gap-2 cursor-pointer shadow-sm text-amber-300 hover:text-amber-200 border-amber-500/30 hover:border-amber-500/50"
+              >
+                <span>⏱️</span>
+                <span>FAANG Mock Interview (45m)</span>
+              </motion.button>
+            )}
           </motion.div>
         </div>
 
@@ -497,6 +510,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </motion.div>
 
+                        {/* Bento Card: FAANG Mock Interview Simulator */}
+            <motion.div
+              whileHover={{ y: -3 }}
+              onClick={onOpenMockInterview}
+              className="apple-card p-6 border border-amber-500/30 hover:border-amber-400/50 bg-gradient-to-b from-amber-950/20 to-transparent flex flex-col justify-between cursor-pointer transition select-none group"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 text-lg">
+                    ⏱️
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 tracking-wider uppercase">
+                    LIVE 45:00 SCREEN
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-white group-hover:text-amber-200 transition">
+                  FAANG Mock Technical Interview
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Full 45-minute timed simulation replicating Google & Meta technical screens. 2 progressive challenges, audio warnings, and instant automated hiring scorecard.
+                </p>
+              </div>
+
+              <div className="pt-4 flex items-center justify-between text-xs font-semibold text-amber-300">
+                <span>Start Simulation</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </motion.div>
+
             {/* Bento Card 2: Dialect Engine */}
             <motion.div
               whileHover={{ y: -3 }}
@@ -609,6 +651,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <TrendingUp className="w-4 h-4 text-emerald-400" />
               <span>Explore Career Paths</span>
             </motion.button>
+            {onOpenMockInterview && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={onOpenMockInterview}
+                className="apple-btn-secondary h-12 px-6 rounded-full text-sm font-semibold flex items-center gap-2 cursor-pointer text-amber-300 hover:text-amber-200 border-amber-500/30 hover:border-amber-500/50"
+              >
+                <span>⏱️</span>
+                <span>FAANG Mock Interview (45m)</span>
+              </motion.button>
+            )}
           </div>
         </div>
       </div>

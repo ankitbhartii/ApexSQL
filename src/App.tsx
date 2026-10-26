@@ -32,6 +32,7 @@ import { ProfileDashboard } from './components/ProfileDashboard';
 import { LandingPage } from './components/LandingPage';
 import { CareerRoadmapsPage } from './components/CareerRoadmapsPage';
 import { DatabaseStudioPage } from './components/DatabaseStudioPage';
+import { MockInterviewPage } from './components/MockInterviewPage';
 import { GlobalNavbar, AppView } from './components/GlobalNavbar';
 import { AuthPage } from './components/AuthPage';
 import { ApexLogo } from './components/ApexLogo';
@@ -1032,6 +1033,9 @@ export default function App() {
       if (h === '#/questions' || h === '#/directory' || h === '#question-library') {
         return 'directory';
       }
+      if (h === '#/interview' || h === '#/mock-interview' || h === '#mock-interview' || h === '#/simulator') {
+        return 'mock-interview';
+      }
       if (h === '#/profile' || h === '#/analytics' || h === '#/dashboard') {
         return 'profile';
       }
@@ -1063,7 +1067,8 @@ export default function App() {
         currentView === 'directory' ||
         currentView === 'roadmaps' ||
         currentView === 'studio' ||
-        currentView === 'profile';
+        currentView === 'profile' ||
+        currentView === 'mock-interview';
 
       if (isProtectedRoute) {
         setCurrentView('landing');
@@ -1112,6 +1117,8 @@ export default function App() {
       // Authenticated route navigation
       if (hash === '#/questions' || hash === '#/directory' || hash === '#question-library') {
         setCurrentView('directory');
+      } else if (hash === '#/interview' || hash === '#/mock-interview' || hash === '#mock-interview' || hash === '#/simulator') {
+        setCurrentView('mock-interview');
       } else if (hash === '#/profile' || hash === '#/analytics' || hash === '#/dashboard') {
         setCurrentView('profile');
       } else if (hash === '#/roadmaps' || hash === '#/tracks' || hash === '#/career') {
@@ -2044,6 +2051,7 @@ export default function App() {
           onOpenRoadmaps={() => openAuthModal('signin')}
           onOpenStudio={() => openAuthModal('signin')}
           onOpenProfile={() => openAuthModal('signin')}
+          onOpenMockInterview={() => openAuthModal('signin')}
           solvedCount={0}
         />
         <AuthModal />
@@ -2107,6 +2115,14 @@ export default function App() {
             } else {
               setCurrentView('profile');
               window.location.hash = '#/profile';
+            }
+          }}
+          onOpenMockInterview={() => {
+            if (!currentUser) {
+              openAuthModal('signin');
+            } else {
+              setCurrentView('mock-interview');
+              window.location.hash = '#/mock-interview';
             }
           }}
           solvedCount={Object.keys(solvedMap).length}
@@ -2321,6 +2337,61 @@ export default function App() {
           }}
           onSyncAll={handleCloudSyncAll}
         />
+        <AuthModal />
+        <PlatformFetchModal
+          isOpen={isPlatformModalOpen}
+          onClose={() => setIsPlatformModalOpen(false)}
+          onSelectProblem={(prob) => {
+            setActiveMode('live_stream');
+            setSelectedLiveProblemId(prob.id);
+            setQuestionNumber(1);
+            setJumpInput('1');
+            setIsPlatformModalOpen(false);
+            setCurrentView('sandbox');
+          }}
+          onToast={(msg) => {
+            setInsertToast(msg);
+            setTimeout(() => setInsertToast(null), 3500);
+          }}
+          onOpenDirectory={() => {
+            setIsPlatformModalOpen(false);
+            setCurrentView('directory');
+            window.location.hash = '#/questions';
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (currentView === 'mock-interview') {
+    return (
+      <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans selection:bg-indigo-600/30 selection:text-indigo-200">
+        <GlobalNavbar
+          currentView={currentView}
+          onNavigate={(v) => {
+            setCurrentView(v);
+            window.location.hash = v === 'landing' ? '#/' : `#/${v}`;
+          }}
+          solvedCount={Object.keys(solvedMap).length}
+          masteredCount={masteredList.length}
+          onSyncAll={handleCloudSyncAll}
+          onLogout={() => {
+            setCurrentView('landing');
+            window.location.hash = '#/';
+          }}
+        />
+        <ErrorBoundary fallbackTitle="Mock Interview Simulator Error">
+          <MockInterviewPage
+            onBackToSandbox={() => {
+              setCurrentView('sandbox');
+              window.location.hash = '#/sandbox';
+            }}
+            onOpenDirectory={() => {
+              setCurrentView('directory');
+              window.location.hash = '#/questions';
+            }}
+          />
+        </ErrorBoundary>
         <AuthModal />
         <PlatformFetchModal
           isOpen={isPlatformModalOpen}
